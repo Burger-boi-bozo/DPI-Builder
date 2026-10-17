@@ -10,6 +10,33 @@ export const SUSPENSION={
   pitchInertia:3280,rollInertia:1380,rideHeight:0.0,
   tireMu:1.08
 };
+export const CHASSIS_SETUPS=Object.freeze({
+  comfort:Object.freeze({label:'COMFORT',springRate:31000,damperBump:3400,damperRebound:3200,rollBar:4300}),
+  balanced:Object.freeze({label:'BALANCED',springRate:38500,damperBump:5100,damperRebound:4200,rollBar:8600}),
+  track:Object.freeze({label:'TRACK',springRate:56000,damperBump:7500,damperRebound:6200,rollBar:15800})
+});
+export function createChassisTune(preset='balanced'){
+  const safe=Object.hasOwn(CHASSIS_SETUPS,preset)?preset:'balanced';
+  return {preset:safe,springScale:1,damperScale:1};
+}
+export function setChassisSetup(a,preset){
+  a.tune=createChassisTune(preset);
+  return a.tune;
+}
+export function setChassisAdjustment(a,key,value){
+  if(!['springScale','damperScale'].includes(key))return a.tune;
+  const val=Number(value);
+  if(Number.isFinite(val))a.tune[key]=clamp(val,.70,1.45);
+  return a.tune;
+}
+export function tuningParameters(tuning){
+  const chosen=CHASSIS_SETUPS[tuning?.preset]||CHASSIS_SETUPS.balanced;
+  const springScale=clamp(Number(tuning?.springScale)||1,.70,1.45),damperScale=clamp(Number(tuning?.damperScale)||1,.70,1.45);
+  const springRate=chosen.springRate*springScale;
+  return {...chosen,springRate,damperBump:chosen.damperBump*damperScale,
+   damperRebound:chosen.damperRebound*damperScale,
+   restCompression:SUSPENSION.mass*G/(4*springRate)};
+}
 const corners=[[-1.08,-1.48],[1.08,-1.48],[-1.08,1.45],[1.08,1.45]];
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 // Driveable suspension proving strip east of the runway: wide, smooth lead-in,
@@ -40,7 +67,9 @@ export function createSuspension(){return {
   contact:[true,true,true,true], tireLoads:[0,0,0,0],
   groundHeights:[0,0,0,0], grip:1, contactCount:4,
   forceTotal:0, maxCompression:0, wheelSpin:[0,0,0,0],
-  lastX:0,lastZ:0,verticalAccel:0, slip:0
+  lastX:0,lastZ:0,verticalAccel:0,slip:0,
+  tune:createChassisTune(),testTime:0,accelG2:0,rideRmsG:0,
+  peakTravel:0,peakRollDeg:0,airborneWheelSeconds:0,bottomOuts:0
 };}
 export function suspensionStep(a,vehicle,dt, options={}){
   if(!a||dt<=0)return a;
@@ -48,6 +77,7 @@ export function suspensionStep(a,vehicle,dt, options={}){
   const yaw=vehicle.yaw||0,cy=Math.cos(yaw),sy=Math.sin(yaw);
   const height=options.height||surfaceAt;
   const mass=options.mass||SUSPENSION.mass;
+  const tune=tuningParameters(options.tune||a.tune);
   const y=Math.max(0,vehicle.y||0);
   const flight=y>.5||vehicle.loopAngle!=null;
   let sum=0, pitchTorque=0,rollTorque=0,contactCount=0;
@@ -60,12 +90,12 @@ export function suspensionStep(a,vehicle,dt, options={}){
     const cornerVelocity=a.heaveVelocity+a.rollVelocity*lx-a.pitchVelocity*lz;
     // Deflection above the nominal loaded wheel location; positive compression
     // drives the tire toward the road; negative compression allows droop.
-    const raw=SUSPENSION.restCompression-(cornerHeight-h);
+    const raw=tune.restCompression-(cornerHeight-h);
     const compression=clamp(raw,0,SUSPENSION.maxCompression);
     const bottomOut=Math.max(0,raw-SUSPENSION.maxCompression);
     // Damping acts against *relative* motion rather than speed alone.
-    const damper=cornerVelocity<0?SUSPENSION.damperBump:SUSPENSION.damperRebound;
-    let f=Math.max(0,SUSPENSION.springRate*compression-damper*cornerVelocity+SUSPENSION.bumpStopRate*bottomOut);
+    const damper=cornerVelocity<0?tune.damperBump:tune.damperRebound;
+    let f=Math.max(0,tune.springRate*compression-damper*cornerVelocity+SUSPENSION.bumpStopRate*bottomOut);
     if(flight||raw < -SUSPENSION.maxDroop)f=0;
     force[i]=f;contact[i]=f>1;
     if(contact[i])contactCount++;
@@ -78,7 +108,7 @@ export function suspensionStep(a,vehicle,dt, options={}){
   // This changes wheel loads; torque sum remains balanced.
   for(const pair of [[0,1],[2,3]]){
     const [l,r]=pair;const delta=travel[l]-travel[r];
-    const anti=SUSPENSION.rollBar*delta;
+    const anti=tune.rollBar*delta;
     if(force[l]+force[r]>0){
       const correction=clamp(anti,-force[r],force[l]);
       force[l]-=correction;force[r]+=correction;
@@ -105,9 +135,19 @@ export function suspensionStep(a,vehicle,dt, options={}){
   a.forceTotal=sum;a.verticalAccel=sum/mass-G;a.contactCount=contactCount;
   a.wheelTravel=travel;a.contact=contact;a.normalForces=force;
   a.tireLoads=force.map(f=>f/G);
-  a.compression=travel.map(t=>clamp(SUSPENSION.restCompression+t,0,SUSPENSION.maxCompression));
+  a.compression=travel.map(t=>clamp(tune.restCompression+t,0,SUSPENSION.maxCompression));
   a.maxCompression=Math.max(...a.compression);
   a.grip=clamp(sum/(mass*G),0,1.35)*(contactCount/4);
+  if(!flight){
+    a.testTime+=dt;
+    const verticalG=a.verticalAccel/G;
+    a.accelG2+=verticalG*verticalG*dt;
+    a.rideRmsG=Math.sqrt(a.accelG2/Math.max(dt,a.testTime));
+    a.peakTravel=Math.max(a.peakTravel,...travel.map(Math.abs));
+    a.peakRollDeg=Math.max(a.peakRollDeg,Math.abs(a.roll)*180/Math.PI);
+    a.airborneWheelSeconds+=(4-contactCount)*dt;
+    if(travel.some(t=>t>=SUSPENSION.maxCompression-.001))a.bottomOuts++;
+  }
   const speed=vehicle.speed||Math.hypot(vehicle.vx||0,vehicle.vz||0);
   for(let i=0;i<4;i++)a.wheelSpin[i]+=(vehicle.drivetrain?vehicle.drivetrain.wheelOmega[i]:speed/SUSPENSION.wheelRadius)*dt;
   return a;

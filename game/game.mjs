@@ -1,7 +1,7 @@
 import {createScene} from './scene.mjs';
 import {createState,step,resetPosition,GATES,LOOP,clamp,heightAt,missionGateCount} from './physics.mjs';
 import {makeResearchState,stepResearch,RESEARCH_STAGES,setPrecision,makeDynamicsState} from './research.mjs';
-import {createSuspension,suspensionStep,SUSPENSION} from './suspension.mjs';
+import {createSuspension,suspensionStep,SUSPENSION,CHASSIS_SETUPS,setChassisSetup,setChassisAdjustment,tuningParameters} from './suspension.mjs';
 import {makeVehicleDynamics} from './vehicle.mjs';
 
 const $=id=>document.getElementById(id);
@@ -16,9 +16,12 @@ function initialize(w){
  const modeTitles={dynamics:'CHASSIS DYNAMICS / DAMPER LAB',research:'X-FLIGHT CERTIFICATION',trial:'FLIGHT TRIAL',stunt:'STUNT RUN',launch:'LAUNCH SPRINT',free:'FREE ROAM'};
  const ghostKey=m=>'roadster-flight-ghost-v2-'+m;
  const isResearchMode=m=>m==='research'||m==='dynamics';
- let suspension=createSuspension(),recording=[],recordTimer=0,ghostTrack=[],ghostEnabled=true,environmentIndex=0;
+ let suspension=createSuspension(),selectedSetup='balanced',benchmark=null,benchmarkHold=false,recording=[],recordTimer=0,ghostTrack=[],ghostEnabled=true,environmentIndex=0;
  let flightLog=[],trace=[],logTimer=0,lastFlightLog=[],replayElapsed=0,replayPlaying=false,replayIndex=0;
  let records={};try{records=JSON.parse(localStorage.getItem('roadster-flight-records-v1')||'{}');}catch{}
+ // Engineering drawer: ground dynamics belongs above flight-only instruments.
+ $('researchPanel').insertBefore($('dynamicsModule'),$('researchPanel').querySelector('.research-header'));
+ $('dynamicsModule').insertBefore($('tuningWorkbench'),$('dynamicsModule').querySelector('.diag-head'));
  const speedTicks=Array.from({length:22},()=>{const i=document.createElement('i');$('speedTicks').appendChild(i);return i;});
  const progressDots=GATES.map(()=>{const i=document.createElement('i');$('missionProgress').appendChild(i);return i;});
  const ctx=$('minimap').getContext('2d');
@@ -36,12 +39,12 @@ function initialize(w){
  function displayCallout(title,sub='',duration=2){$('callout').querySelector('strong').textContent=title;$('callout').querySelector('span').textContent=sub;calloutTime=duration;$('callout').classList.add('show');}
  function updateGateStyle(){const racing=state.mode==='trial'||state.mode==='launch';gates.forEach((g,i)=>{g.group.visible=racing?i<missionGateCount(state.mode)&&i>=state.gate&&i<=state.gate+2:state.mode==='free';g.ring.material.color.set(i===state.gate&&racing?0xe4ff95:0xab97db);g.number.visible=racing&&i<missionGateCount(state.mode);});gateGroup.visible=phase==='menu'||(state.mode!=='stunt'&&!isResearchMode(state.mode));}
  function start(){
-   closeDialogs();clearKeys();state=selectedMode==='research'?makeResearchState():selectedMode==='dynamics'?makeDynamicsState():createState(selectedMode);suspension=createSuspension();if(selectedMode==='dynamics')state.drivetrain=makeVehicleDynamics();recording=[];recordTimer=0;ghostTrack=[];flightLog=[];trace=[];logTimer=0;replayElapsed=0;replayPlaying=false;
+   closeDialogs();clearKeys();benchmarkHold=false;state=selectedMode==='research'?makeResearchState():selectedMode==='dynamics'?makeDynamicsState():createState(selectedMode);suspension=createSuspension();setChassisSetup(suspension,selectedSetup);if(selectedMode==='dynamics')state.drivetrain=makeVehicleDynamics();recording=[];recordTimer=0;ghostTrack=[];flightLog=[];trace=[];logTimer=0;replayElapsed=0;replayPlaying=false;
    $('replayPanel').classList.add('hidden');$('researchPanel').classList.toggle('hidden',!isResearchMode(state.mode));$('app').dataset.mode=state.mode;w.setResearchPhase(isResearchMode(state.mode),state.stage||0);
    try{ghostTrack=JSON.parse(localStorage.getItem(ghostKey(state.mode))||'[]');if(!Array.isArray(ghostTrack))ghostTrack=[];}catch{ghostTrack=[];}
-   w.setGhostPose(null);setPhase('countdown');countdown=3;accumulator=0;cameraMode=0;
+   w.setGhostPose(null);w.resetSkids();setPhase('countdown');countdown=3;accumulator=0;cameraMode=0;
    $('menu').classList.add('hidden');$('hud').classList.remove('hidden');$('pauseButton').classList.remove('hidden');$('app').classList.add('playing');$('countdown').classList.remove('hidden');$('countdown').textContent='3';$('callout').classList.remove('show');calloutTime=0;
-   $('modeName').textContent=modeTitles[state.mode];$('stuntObjectives').classList.toggle('hidden',state.mode!=='stunt');$('missionProgress').classList.toggle('hidden',!['trial','launch'].includes(state.mode));$('targetCompass').classList.toggle('hidden',!['trial','launch'].includes(state.mode));
+   updateTuningUI();$('modeName').textContent=modeTitles[state.mode];$('stuntObjectives').classList.toggle('hidden',state.mode!=='stunt');$('missionProgress').classList.toggle('hidden',!['trial','launch'].includes(state.mode));$('targetCompass').classList.toggle('hidden',!['trial','launch'].includes(state.mode));
    $('bestLabel').textContent=state.mode==='dynamics'?'CHASSIS / LIVE':['trial','launch'].includes(state.mode)?'BEST TIME':'BEST SCORE';$('best').textContent=['trial','launch'].includes(state.mode)?(records[state.mode]?formatTime(records[state.mode]):'—'):(records[state.mode]||'—');
    $('ghostStatus').textContent=state.mode==='dynamics'?'SUSPENSION TEST STRIP: 200 METERS':ghostTrack.length?'BEST-RUN GHOST: ACTIVE':'BEST-RUN GHOST: SET A RECORD';
    $('pauseButton').setAttribute('aria-label','Pause game');updateGateStyle();car.scale.setScalar(1);camera.fov=55;camera.updateProjectionMatrix();positionCamera(1,true);updateHud();
@@ -131,6 +134,14 @@ function initialize(w){
       $('driveGrip').textContent=(d.gripUtilization*100).toFixed(0)+'%';
       $('driveSafety').textContent=d.absActive?'ABS ACTIVE':d.escActive?'ESC CORRECTING':d.contactImpacts?'FRAME IMPACT '+d.contactImpacts:'FULL TRACTION';
       $('surfaceToggle').textContent=state.roadMu<.7?'ROAD / WET':'ROAD / DRY';
+      $('benchRms').textContent=suspension.rideRmsG.toFixed(3)+' g';
+      $('benchRoll').textContent=suspension.peakRollDeg.toFixed(1)+'°';
+      $('benchAirtime').textContent=(suspension.airborneWheelSeconds/4).toFixed(2)+' s';
+      $('benchBottoms').textContent=String(suspension.bottomOuts);
+      if(benchmark && !benchmarkHold && suspension.testTime>1.5){
+        const delta=100*(suspension.rideRmsG/Math.max(.0001,benchmark.rms)-1);
+        $('benchComparison').textContent=`BASELINE ${benchmark.setup.toUpperCase()} / ${benchmark.rms.toFixed(3)} g · CURRENT ${suspension.rideRmsG.toFixed(3)} g (${delta>=0?'+':''}${delta.toFixed(1)}% vibration)`;
+      }
    }
    $('researchStageNumber').style.color=state.structural<35?'#ff978a':'#b5eaf4';
    $('horizonGround').style.transform=`translateY(${clamp(state.pitch+suspension.pitch,-.3,.3)*130}px) rotate(${clamp(state.roll+suspension.roll,-.45,.45)*180/Math.PI}deg)`;
@@ -154,6 +165,28 @@ function initialize(w){
    c.font='9px monospace';c.fillStyle='#a9f0ff';c.fillText('ALT',7,12);c.fillStyle='#d7a8ff';c.fillText('THRUST',42,12);
  }
  function toggleSurface(){if(state.mode!=='dynamics')return;state.roadMu=state.roadMu<.7?1.06:.54;displayCallout(state.roadMu<.7?'WET TEST SURFACE':'DRY TEST SURFACE',state.roadMu<.7?'LESS GRIP / LONGER BRAKING DISTANCE':'FULL TIRE ADHESION',1.6);}
+ function updateTuningUI(){
+   const t=tuningParameters(suspension.tune);
+   $('springTuning').value=String(Math.round(suspension.tune.springScale*100));
+   $('damperTuning').value=String(Math.round(suspension.tune.damperScale*100));
+   $('springRateLabel').textContent=(t.springRate/1000).toFixed(1)+' kN/m';
+   $('damperRateLabel').textContent=Math.round(suspension.tune.damperScale*100)+'%';
+   document.querySelectorAll('[data-setup]').forEach(button=>{
+     const selected=button.dataset.setup===selectedSetup;
+     button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));
+   });
+   $('app').dataset.chassis=selectedSetup;
+ }
+ function changeSetup(preset){
+   if(state.mode!=='dynamics'||!Object.hasOwn(CHASSIS_SETUPS,preset))return;
+   selectedSetup=preset;setChassisSetup(suspension,preset);benchmarkHold=false;updateTuningUI();
+   if(phase==='running')displayCallout(CHASSIS_SETUPS[preset].label+' SETUP','SPRING / DAMPER / ANTI-ROLL CALIBRATED',1.5);
+ }
+ function saveBenchmark(){
+   if(state.mode!=='dynamics'||suspension.testTime<3||state.z>55){$('benchComparison').textContent='Cross the first speed hump (z ≤ 55 m) before saving a benchmark.';return;}
+   benchmark={setup:selectedSetup,rms:suspension.rideRmsG,roll:suspension.peakRollDeg,air:suspension.airborneWheelSeconds/4};benchmarkHold=true;
+   $('benchComparison').textContent='BENCHMARK SAVED · Restart the course or select a new setup to compare.';
+ }
  function togglePrecision(){if(!isResearchMode(state.mode)||phase!=='running')return;setPrecision(state,!state.precision);displayCallout(state.precision?'ALTITUDE HOLD ENGAGED':'MANUAL VERTICAL CONTROL',state.precision?'PROPELLANT CONSUMPTION CONTINUES':'BALLISTIC DESCENT',1.5);}
  function toggleAssist(){if(!isResearchMode(state.mode)||phase!=='running')return;state.assist=!state.assist;displayCallout(state.assist?'STABILITY AUGMENTATION ON':'DIRECT THRUSTER RESPONSE',state.assist?'WIND COMPENSATION ENABLED':'MANUAL CORRECTION REQUIRED',1.5);}
  function captureData(){
@@ -253,6 +286,7 @@ function initialize(w){
        if(active&&state.boosting){temp.set((Math.random()-.5)*1.6,.5,2.5).applyMatrix4(car.matrixWorld);velocity.set(Math.sin(state.yaw)*14,Math.random()*.7,Math.cos(state.yaw)*14);w.emit(temp,velocity);}
      }
    }
+   if(active&&state.mode==='dynamics'&&Math.floor(elapsed*14)!==Math.floor((elapsed-dt)*14))w.stampSkids(state);
    w.setVehicleEffects(state,elapsed);if(isResearchMode(state.mode))w.updateResearchScene(state,elapsed);
    w.updateParticles(dt);
    if(phase!=='menu')updateHud();
@@ -267,7 +301,7 @@ function initialize(w){
    $('telemetryToggle').setAttribute('aria-expanded',String(!opened));
    $('telemetryToggle').textContent=opened?'SHOW SYSTEMS':'HIDE SYSTEMS';
  });
- const gameKeys=new Set(['KeyY','KeyZ','KeyG','KeyJ','KeyL','KeyT','KeyH','KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','ShiftRight','KeyQ','KeyE','KeyF','KeyC','KeyR']);
+ const gameKeys=new Set(['KeyB','KeyY','KeyZ','KeyG','KeyJ','KeyL','KeyT','KeyH','KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','ShiftRight','KeyQ','KeyE','KeyF','KeyC','KeyR']);
  window.addEventListener('keydown',e=>{
    if(e.code==='KeyM'&&!e.repeat){toggleSound();return;}
    if(e.code==='KeyT'&&!e.repeat){cycleEnvironment();return;}
@@ -276,7 +310,7 @@ function initialize(w){
    if(e.code==='Escape'||e.code==='KeyP'){if(phase==='paused'){e.preventDefault();resume();}else if(phase==='running'||phase==='countdown'){e.preventDefault();pause();}return;}
    if(phase!=='running'&&phase!=='countdown')return;
    if(gameKeys.has(e.code))e.preventDefault();keys.add(e.code);
-   if(!e.repeat){if(e.code==='KeyY'&&state.mode==='dynamics'){toggleSurface();return;}if(e.code==='KeyZ'){togglePrecision();return;}if(e.code==='KeyG'){toggleAssist();return;}if(e.code==='KeyQ')rollInput=1;if(e.code==='KeyE')rollInput=-1;if(e.code==='KeyC'){cameraMode=(cameraMode+1)%3;positionCamera(1,true);}if(e.code==='KeyF'){state.suction=!state.suction;displayCallout(state.suction?'SUCTION ENABLED':'SUCTION OFF',state.suction?'WEST LOOP READY':'FREE ROLLING',1.3);}if(e.code==='KeyR'){if(isResearchMode(state.mode)){start();return;}resetPosition(state,phase==='running');positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);}}
+   if(!e.repeat){if(e.code==='KeyB'&&state.mode==='dynamics'){const order=['comfort','balanced','track'];changeSetup(order[(order.indexOf(selectedSetup)+1)%order.length]);return;}if(e.code==='KeyY'&&state.mode==='dynamics'){toggleSurface();return;}if(e.code==='KeyZ'){togglePrecision();return;}if(e.code==='KeyG'){toggleAssist();return;}if(e.code==='KeyQ')rollInput=1;if(e.code==='KeyE')rollInput=-1;if(e.code==='KeyC'){cameraMode=(cameraMode+1)%3;positionCamera(1,true);}if(e.code==='KeyF'){state.suction=!state.suction;displayCallout(state.suction?'SUCTION ENABLED':'SUCTION OFF',state.suction?'WEST LOOP READY':'FREE ROLLING',1.3);}if(e.code==='KeyR'){if(isResearchMode(state.mode)){start();return;}resetPosition(state,phase==='running');positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);}}
  });
  window.addEventListener('keyup',e=>keys.delete(e.code));
  window.addEventListener('blur',()=>{clearKeys();pause();});
@@ -288,6 +322,11 @@ function initialize(w){
  document.querySelector('[data-action="roll"]').addEventListener('pointerdown',e=>{e.preventDefault();rollInput=1;});
  document.querySelector('[data-action="reset"]').addEventListener('pointerdown',e=>{e.preventDefault();if(phase!=='running')return;if(isResearchMode(state.mode)){start();return;}resetPosition(state);positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);});
  $('surfaceToggle').addEventListener('click',toggleSurface);
+ document.querySelectorAll('[data-setup]').forEach(button=>button.addEventListener('click',()=>changeSetup(button.dataset.setup)));
+ for(const [id,key] of [['springTuning','springScale'],['damperTuning','damperScale']]){
+   $(id).addEventListener('input',()=>{if(state.mode!=='dynamics')return;setChassisAdjustment(suspension,key,Number($(id).value)/100);updateTuningUI();});
+ }
+ $('benchBaseline').addEventListener('click',saveBenchmark);
  $('precisionButton').addEventListener('click',togglePrecision);$('assistButton').addEventListener('click',toggleAssist);
  document.querySelector('[data-action="precision"]').addEventListener('pointerdown',e=>{e.preventDefault();togglePrecision();});
  document.querySelector('[data-action="stabilize"]').addEventListener('pointerdown',e=>{e.preventDefault();toggleAssist();});

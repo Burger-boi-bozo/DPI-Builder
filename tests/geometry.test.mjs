@@ -25,3 +25,10 @@ test('simple distant model reduces draw calls while retaining wheels and body',(
  assert.ok(meshes<160,`distant model ${meshes}`);
  assert.equal(car.userData.wheels.length,4);
 });
+test('vehicle exposes four separate heat-responsive rotors and isolated brake-lamp material',()=>{
+ const one=makeCar(),two=makeCar(0xc0a0e0,true);
+ assert.equal(one.userData.brakeRotors.length,4);
+ assert.ok(one.userData.brakeRotors.every(o=>o.isMesh&&o.material.isMeshStandardMaterial));
+ assert.ok(one.userData.brakeLamp.isMeshBasicMaterial);
+ assert.notEqual(one.userData.brakeLamp,two.userData.brakeLamp,'changing the player brake lamp must not recolor NPC cars');
+});

@@ -8,6 +8,16 @@ export const VEHICLE={
  maxDriveN:16200,maxBrakingN:25900,regenBrakingN:4400,
  capacityKWh:84,dragCdA:.75,rollingResistance:.0115
 };
+// Laboratory approximation: load sensitivity and compound temperature response.
+// Peak friction occurs at a warm tread. No measured OEM tire data is assumed.
+export function effectiveTireMu(base,tempC,normalN,velocity=0){
+  const tempFactor=clamp(1-Math.pow((tempC-62)/155,2),.64,1.02);
+  const loadFactor=clamp(1-.105*(normalN/5300-1),.80,1.12);
+  const wet=base<.75;
+  const waterFactor=wet?1-.23*clamp((Math.abs(velocity)-18)/47,0,1):1;
+  return clamp(base*tempFactor*loadFactor*waterFactor,.09,1.9);
+}
+export function brakeFadeFactor(rotorC){return clamp(1-.62*clamp((rotorC-360)/340,0,1),.38,1);}
 const corners=[[-1.08,-1.48],[1.08,-1.48],[-1.08,1.45],[1.08,1.45]];
 export function makeVehicleDynamics(){return {
  yawRate:0,steerAngle:0,steerCommand:0,
@@ -61,11 +71,12 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
    // Pacejka-inspired smooth saturation, relative to instantaneous vertical load.
    // Lateral tire force does not exist at zero wheel contact.
    const slipAngle=Math.atan2(wheelSide,Math.max(2,Math.abs(wheelLong)));
-   const lateralMax=mu*n;
+   const tireMu=effectiveTireMu(mu,d.tireTemperature[i],n,speed);
+   const lateralMax=tireMu*n;
    let fy=-lateralMax*Math.tanh(VEHICLE.corneringRate*slipAngle);
    const axleFraction=front?.46:.54;
    const drive=driveTotal*axleFraction/2;
-   const brake=brakeTotal*(front?.62:.38)/2;
+   const brake=brakeTotal*(front?.62:.38)/2*brakeFadeFactor(d.brakeTemperature[i]);
    const roadSign=wheelLong>=-.1?1:-1;
    let demand=drive-brake*roadSign;
    // Combine braking and cornering inside a friction circle (not independent grip).
@@ -90,7 +101,7 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
    const slipHeat=Math.abs(fy*wheelSide)+Math.abs(fx*(d.wheelOmega[i]*VEHICLE.wheelRadius-wheelLong));
    d.tireTemperature[i]=clamp(d.tireTemperature[i]+(slipHeat*.000075-(d.tireTemperature[i]-26)*.06)*dt,10,145);
    const discHeat=Math.abs(brake*wheelLong)*.00048;
-   d.brakeTemperature[i]=clamp(d.brakeTemperature[i]+(discHeat-(d.brakeTemperature[i]-27)*.032)*dt,20,690);
+   d.brakeTemperature[i]=clamp(d.brakeTemperature[i]+(discHeat-(d.brakeTemperature[i]-27)*(.032+speed*.0007))*dt,20,690);
  }
  const density=1.225,dragForce=.5*density*VEHICLE.dragCdA*speed*speed;
  const rolling=VEHICLE.rollingResistance*m*9.80665;

@@ -33,7 +33,8 @@ export function makeCar(color=0xdfe6ea,simple=false){
   sections(body,[[-.20,.77,1.53],[.6,.77,1.53]],1.50,shell);
   box(body,2.07,.12,4.35,dark,0,.31,0);
   box(body,1.94,.035,.06,glow(0xd5efff),0,.64,-2.355);
-  box(body,2.09,.065,.05,glow(0xff4d60),0,.75,2.23);
+  const brakeLamp=glow(0xff4558);
+  box(body,2.09,.065,.05,brakeLamp,0,.75,2.23);
   box(body,2.14,.16,.08,dark,0,.46,2.24);
   box(body,.44,.18,.03,dark,0,.6,2.28);
   const label=makeLabel('RDSTR','#dce3eb',128,32);label.scale.set(.38,.095,1);label.position.set(0,.61,2.31);body.add(label);
@@ -79,7 +80,7 @@ export function makeCar(color=0xdfe6ea,simple=false){
   for(let i=0;i<9;i++)for(const side of [-1,1]){
     box(body,.02,.012,.042,carbonDetail,side*(.54+i*.052),.84,-2.25+i*.01);
   }
-  const wheels=[],springs=[];
+  const wheels=[],springs=[],brakeRotors=[];
   for(const x of [-1.08,1.08])for(const z of [-1.48,1.45]){
     const wheel=new T.Group();wheel.position.set(x,.45,z);body.add(wheel);
     const tire=mesh(new T.CylinderGeometry(.45,.45,.35,24),rubber,wheel);tire.rotation.z=Math.PI/2;
@@ -102,6 +103,7 @@ export function makeCar(color=0xdfe6ea,simple=false){
     if(caliper){carrier.add(caliper);caliper.position.set(outer*.7,.49,.21);}
     if(!simple){
       const rotor=mesh(new T.CylinderGeometry(.355,.355,.020,40),mat(0x818d99,.34,.72),wheel,outer*.58,0,0);rotor.rotation.z=Math.PI/2;
+      brakeRotors.push(rotor);
       for(const offset of [-.16,.16]){
         const ridge=mesh(new T.TorusGeometry(.428,.009,4,36),carbonDetail,wheel,offset,0,0);ridge.rotation.y=Math.PI/2;
       }
@@ -127,7 +129,7 @@ export function makeCar(color=0xdfe6ea,simple=false){
   for(const x of [-.65,.65])box(body,.065,.23,.16,dark,x,1.02,1.93);
   box(body,2.35,.065,.37,shell,0,1.15,1.96);
   for(const x of [-1.14,1.14])box(body,.035,.16,.4,dark,x,1.18,1.96);
-  group.userData={body,wheels,springs};return group;
+  group.userData={body,wheels,springs,brakeLamp,brakeRotors};return group;
 }
 export function makeLabel(text,color='#dce8ff',w=512,h=96){
   const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d');
@@ -331,6 +333,14 @@ export function createScene(container){
     });
   }
   function setVehicleEffects(s,t){
+    if(s.mode==='dynamics'&&s.drivetrain){
+      const d=s.drivetrain;
+      car.userData.brakeLamp.color.setHex(d.regenKw>1||d.brakeTemperature.some((v,i)=>d.tireForceX[i]<-1000)?0xffacb7:0xff4558);
+      car.userData.brakeRotors.forEach((r,i)=>{
+        const glowFactor=Math.max(0,Math.min(1,(d.brakeTemperature[i]-330)/350));
+        r.material.color.setRGB(.51+glowFactor*.48,.57-glowFactor*.32,.62-glowFactor*.52);
+      });
+    }else car.userData.brakeLamp.color.setHex(0xff4558);
     const power=s.lifting?(s.thrustG?Math.min(1,s.thrustG/2):1):0;
     vehicleJets.forEach((jet,i)=>{
       jet.visible=power>.01;
@@ -368,6 +378,29 @@ export function createScene(container){
     return e.name;
   }
 
+  // Tire-track decal pool. Stamps are generated only from actual loaded,
+  // sliding contact patches and match the road height in the solver.
+  const trackMaterial=new T.MeshBasicMaterial({color:0x0c1119,transparent:true,opacity:.37,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1});
+  const trackGeo=new T.PlaneGeometry(.24,.72);trackGeo.rotateX(-Math.PI/2);
+  const skidPool=new T.InstancedMesh(trackGeo,trackMaterial,520);
+  skidPool.count=0;skidPool.frustumCulled=false;skidPool.castShadow=false;skidPool.receiveShadow=false;scene.add(skidPool);
+  const skidDummy=new T.Object3D();let skidCounter=0;
+  function resetSkids(){skidCounter=0;skidPool.count=0;}
+  function stampSkids(state){
+    if(state.mode!=='dynamics'||state.y>.25||!state.drivetrain||state.speed<4)return;
+    const d=state.drivetrain,sy=Math.sin(state.yaw),cy=Math.cos(state.yaw);
+    const corners=[[-1.08,-1.48],[1.08,-1.48],[-1.08,1.45],[1.08,1.45]];
+    for(let i=0;i<4;i++){
+      if(d.wheelLoads[i]<900||Math.abs(d.longitudinalSlip[i])<.17&&Math.abs(d.slipAngles[i])<.105)continue;
+      const [lx,lz]=corners[i];const x=state.x+lx*cy+lz*sy,z=state.z-lx*sy+lz*cy;
+      skidDummy.position.set(x,surfaceAt(x,z)+.038,z);
+      skidDummy.rotation.set(0,state.yaw+(i<2?d.steerAngle:0),0);
+      skidDummy.scale.set(1,1,1);skidDummy.updateMatrix();
+      skidPool.setMatrixAt(skidCounter%520,skidDummy.matrix);
+      skidCounter++;skidPool.count=Math.min(520,skidCounter);
+    }
+    skidPool.instanceMatrix.needsUpdate=true;
+  }
   // A translucent contact shadow keeps the flying car legible above the terrain.
   const sc=document.createElement('canvas');sc.width=sc.height=128;const ctx=sc.getContext('2d'),grad=ctx.createRadialGradient(64,64,0,64,64,64);grad.addColorStop(0,'rgba(8,15,28,0.5)');grad.addColorStop(.5,'rgba(8,15,28,0.3)');grad.addColorStop(1,'rgba(8,15,28,0)');ctx.fillStyle=grad;ctx.fillRect(0,0,128,128);
   const shadow=mesh(new T.PlaneGeometry(6,9),new T.MeshBasicMaterial({map:new T.CanvasTexture(sc),transparent:true,depthWrite:false}),scene);shadow.rotation.x=-Math.PI/2;shadow.castShadow=false;shadow.receiveShadow=false;
@@ -380,5 +413,5 @@ export function createScene(container){
   let cursor=0;
   function emit(at,velocity,color=0xcde9ff){const id=cursor++%particleCount;const p=particles[id];p.life=.45+Math.random()*.5;p.v.copy(velocity);particlePositions.set([at.x,at.y,at.z],id*3);const col=new T.Color(color);particleColors.set([col.r,col.g,col.b],id*3);}
   function updateParticles(dt){for(let i=0;i<particleCount;i++){const p=particles[i];if(p.life<=0)continue;p.life-=dt;particlePositions[i*3]+=p.v.x*dt;particlePositions[i*3+1]+=p.v.y*dt;particlePositions[i*3+2]+=p.v.z*dt;p.v.multiplyScalar(1-dt*.8);if(p.life<=0)particlePositions[i*3+1]=-999;}pg.attributes.position.needsUpdate=true;pg.attributes.color.needsUpdate=true;}
-  return {T,scene,renderer,camera,car,ghost,gates,gateGroup,sun,shadow,emit,updateParticles,setGhostPose,setEnvironment,setResearchPhase,updateResearchScene,setVehicleEffects};
+  return {T,scene,renderer,camera,car,ghost,gates,gateGroup,sun,shadow,emit,updateParticles,stampSkids,resetSkids,setGhostPose,setEnvironment,setResearchPhase,updateResearchScene,setVehicleEffects};
 }
