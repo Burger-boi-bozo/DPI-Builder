@@ -5,7 +5,7 @@ ROOT=/opt/roadster-flight
 ARCHIVE="$ROOT/artifacts/roadster-v2-deploy.zip"
 [ "$(id -u)" -eq 0 ] || { echo 'Requires root'; exit 1; }
 [ -f "$ARCHIVE" ] || { echo "Missing $ARCHIVE"; exit 1; }
-command -v unzip >/dev/null
+command -v python3 >/dev/null
 command -v node >/dev/null
 cd "$ROOT"
 node --test tests/*.test.mjs
@@ -14,7 +14,7 @@ node --check game/scene.mjs
 node --check game/physics.mjs
 STAGE=$(mktemp -d "$ROOT/.v2-release-XXXXXXXX")
 trap 'rm -rf "$STAGE"' EXIT
-unzip -q "$ARCHIVE" -d "$STAGE"
+python3 -m zipfile -e "$ARCHIVE" "$STAGE"
 [ -s "$STAGE/game/index.html" ] && [ -s "$STAGE/game/three.module.min.js" ]
 mkdir -p "$ROOT/releases"
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
