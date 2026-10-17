@@ -1,4 +1,4 @@
-name: Roadster V2 (V1 Heritage)
+name: Roadster V2 — Experimental Flight Lab
 on:
   push:
     branches: [roadster-flight-v2]
@@ -12,16 +12,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Extract bundled runtime dependencies
-        run: unzip -oq artifacts/roadster-v2-deploy.zip 'game/three.module.min.js' 'game/font*.ttf'
-      - name: Syntax and physics
+      - name: Restore bundled offline assets
+        run: python3 -m zipfile -e artifacts/roadster-v2-deploy.zip .
+      - name: Syntax validation and 27 physics regressions
         run: |
           node --check game/game.mjs
           node --check game/scene.mjs
           node --check game/physics.mjs
+          node --check game/research.mjs
           node --test tests/*.test.mjs
-      - name: Confirm offline assets
+      - name: Verify self-contained release assets
         run: |
           test -s game/three.module.min.js
           test -s game/FONTS-OFL-1.1.txt
+          test -s game/research.mjs
           test -s artifacts/roadster-v2-deploy.zip
+          grep -q 'Roadster X-Flight V2' game/index.html

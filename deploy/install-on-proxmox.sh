@@ -1,30 +1,43 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Run on pve from an up-to-date roadster-flight-v2 checkout. No DNS edits.
+# No DNS edits. Fetch the approved branch before running this script on pve.
 ROOT=/opt/roadster-flight
 ARCHIVE="$ROOT/artifacts/roadster-v2-deploy.zip"
 [ "$(id -u)" -eq 0 ] || { echo 'Requires root'; exit 1; }
-[ -f "$ARCHIVE" ] || { echo "Missing $ARCHIVE"; exit 1; }
+[ -s "$ARCHIVE" ] || { echo "Missing archive: $ARCHIVE"; exit 1; }
 command -v python3 >/dev/null
 command -v node >/dev/null
 cd "$ROOT"
 node --test tests/*.test.mjs
-node --check game/game.mjs
-node --check game/scene.mjs
-node --check game/physics.mjs
+for f in game/game.mjs game/scene.mjs game/physics.mjs game/research.mjs; do node --check "$f"; done
 STAGE=$(mktemp -d "$ROOT/.v2-release-XXXXXXXX")
-trap 'rm -rf "$STAGE"' EXIT
+BACKUP=""
+SWAPPED=0
+cleanup() {
+  rc=$?
+  if [ "$rc" -ne 0 ] && [ "$SWAPPED" -eq 1 ] && [ -n "$BACKUP" ] && [ -d "$BACKUP" ]; then
+    echo 'Verification failed, restoring previous production files' >&2
+    [ ! -e "$ROOT/dist" ] || mv "$ROOT/dist" "$STAGE/failed-dist"
+    mv "$BACKUP" "$ROOT/dist"
+  fi
+  rm -rf "$STAGE"
+  exit "$rc"
+}
+trap cleanup EXIT
 python3 -m zipfile -e "$ARCHIVE" "$STAGE"
-[ -s "$STAGE/game/index.html" ] && [ -s "$STAGE/game/three.module.min.js" ]
+[ -s "$STAGE/game/index.html" ] && [ -s "$STAGE/game/research.mjs" ] && [ -s "$STAGE/game/three.module.min.js" ]
+grep -q 'Roadster X-Flight V2' "$STAGE/game/index.html"
 mkdir -p "$ROOT/releases"
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
-if [ -e "$ROOT/dist" ]; then mv "$ROOT/dist" "$ROOT/releases/previous-$STAMP"; fi
+if [ -d "$ROOT/dist" ]; then BACKUP="$ROOT/releases/previous-$STAMP";mv "$ROOT/dist" "$BACKUP";fi
 mv "$STAGE/game" "$ROOT/dist"
+SWAPPED=1
 chmod -R a+rX "$ROOT/dist"
 chown -R root:root "$ROOT/dist"
-# The existing systemd server serves the dist path and keeps the Cloudflare ingress untouched.
-systemctl is-active --quiet roadster-flight.service || systemctl restart roadster-flight.service
+if ! systemctl is-active --quiet roadster-flight.service; then systemctl restart roadster-flight.service;fi
 sleep 1
-curl -fsSI http://127.0.0.1:18767/ >/dev/null
-curl -fsS http://127.0.0.1:18767/ | grep -q 'Roadster Flight Lab V2'
-echo 'V2 deployed to /opt/roadster-flight/dist and verified on 127.0.0.1:18767'
+curl -fsSI --max-time 8 http://127.0.0.1:18767/ >/dev/null
+curl -fsS --max-time 8 http://127.0.0.1:18767/ | grep -q 'Roadster X-Flight V2'
+curl -fsSI --max-time 8 http://127.0.0.1:18767/research.mjs >/dev/null
+SWAPPED=0
+printf 'V2.5 deployed to %s/dist; previous release %s\n' "$ROOT" "$BACKUP"
