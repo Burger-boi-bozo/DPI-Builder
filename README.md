@@ -4,8 +4,8 @@ Standalone 3D arcade driving and flight experience, built with Three.js + Vite. 
 
 ## Live build
 
-- Intended URL: https://fly.dpifiles.org
-- Host: Proxmox `pve`, serving a static Vite build through an isolated local HTTP service and existing Cloudflare Tunnel.
+- Public URL: https://fly.dpifiles.org — verified HTTP 200 without ChatGPT authentication on October 17, 2026.
+- Host: Proxmox `pve`, serving a static Vite build through an isolated local HTTP service and existing Cloudflare Tunnel. The public DNS CNAME points to the tunnel, not ChatGPT Sites.
 - Legacy V1: https://roadster-flight-lab.bonnycove6.chatgpt.site (preserved separately).
 
 ## Features
@@ -45,7 +45,7 @@ npm run check
 npm run build
 ```
 
-`dist/` is the static deployment artifact. No API keys, user accounts, telemetry collection, or paid services required.
+`dist/` is the static deployment artifact, served by `roadster-flight.service` on localhost port 18767 on Proxmox `pve`. Public traffic flows through `cloudflared-public-routes.service`. Run `bash deploy/verify.sh` for repeatable checks. No API keys, user accounts, telemetry collection, or paid services required.
 
 ## Provenance and media
 
