@@ -10,10 +10,10 @@ Standalone 3D arcade driving and flight experience, built with Three.js + Vite. 
 
 ## Features
 
-- Three modes: **Launch Run** (6 staged checkpoints + runway ramp), **Sky Trial** (12 aerial checkpoints), **Free Flight** (open simulation).
-- Procedural Roadster-inspired 3D vehicle, road, launch ramp, distant mountains, tower landmarks, gates, particle thrusters, sunset environment.
+- Four modes: **Launch Run** (6 staged checkpoints + runway ramp), **Sky Trial** (12 aerial checkpoints), **Stunt Demo** (five-stage inverted suction loop and kickflip course inspired by the October 2026 reveal), **Free Flight** (open simulation).
+- Procedural Roadster-inspired 3D vehicle (red prototype and white reveal colorways), road, launch ramp, distant mountains, tower landmarks, gates, particle thrusters, sunset environment.
 - Arcade 6-DoF-inspired control: steering, yaw, pitch, roll, thrust, boost, landing and automatic ramp launch.
-- Chase, long-chase, cockpit, and look-back cameras.
+- Chase, long-chase, cockpit, and look-back cameras; airborne kickflips and suction-assisted inverted-loop driving.
 - HUD with live speed, altitude, climb rate, boost, checkpoints, elapsed time, and best run (localStorage).
 - Keyboard and touch controls; opt-in synthesized engine sound.
 - Accessibility: focus outlines and reduced-motion support.
@@ -28,13 +28,13 @@ Standalone 3D arcade driving and flight experience, built with Three.js + Vite. 
 | F | Toggle flight mode |
 | Up / Down | Pitch up / down |
 | Q / E | Roll while flying |
-| Shift | Rocket boost |
+| Shift | Rocket boost |\n| X | Activate fan grip to stick to the inverted loop |\n| Space | Airborne kickflip |
 | C | Cycle camera |
 | V | Look back |
 | R | Restart run |
 | Esc | Pause / Resume |
 
-On mobile, use the on-screen arrow, GO, FLIGHT and BOOST controls.
+On mobile, use the on-screen arrow, GO, FLIGHT, BOOST, SUCTION and FLIP controls.
 
 ## Local development
 
@@ -49,7 +49,7 @@ npm run build
 
 ## Provenance and media
 
-The original V1 was a separately hosted sign-in-protected ChatGPT site and its source was not directly retrievable. This is an independent V2 implementation, not a byte-for-byte fork. A Roadster demonstration clip reportedly downloaded in Crate was not present in the inspected local Crate directories; no third-party video was bundled or republished.
+The original V1 was a separately hosted sign-in-protected ChatGPT site and its source was not directly retrievable. This is an independent V2 implementation, not a byte-for-byte fork. A Roadster demonstration clip reportedly downloaded in Crate was not present in the inspected local Crate directories; no third-party video was bundled or republished. The stunt challenge is a stylized interpretation of public October 2026 Roadster reveal coverage, not a mechanically accurate simulation or a frame-by-frame video recreation.
 
 ## Version control
 

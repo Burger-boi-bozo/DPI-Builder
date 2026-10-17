@@ -7,6 +7,7 @@ const $=id=>document.getElementById(id);
 const world=createWorld($('world'));
 let mode='launch',phase='menu',state=freshState(mode),gates=makeGates(mode);
 let last=performance.now(),lookBack=false,sound=false,soundSystem=null,noticeEnd=0,controlsFrom='menu';
+let spinActive=false,spinTime=0,flipCount=0;
 const keys=new Set();
 const bestKey=m=>'roadster-v2-best-'+m;
 function readBest(m){try{const x=Number(localStorage.getItem(bestKey(m)));return x>0?x:null;}catch{return null;}}
@@ -24,15 +25,15 @@ function setStatus(msg){$('statusText').textContent=msg;}
 function start(){
   state=freshState(mode);gates=makeGates(mode);
   world.setGates(gates);world.update(state,0,0,false);
-  keys.clear();phase='playing';document.body.classList.add('playing');swapView('hud');
+  keys.clear();spinActive=false;spinTime=0;flipCount=0;$('flipCount').textContent='00';phase='playing';document.body.classList.add('playing');swapView('hud');
   $('missionTitle').textContent='0'+(Object.keys(MODES).indexOf(mode)+1)+' / '+MODES[mode].name;
   $('gateTotal').textContent=String(gates.length).padStart(2,'0');
   $('gateCurrent').textContent='0';
   $('bestTime').textContent=readBest(mode)?formatTime(readBest(mode)):'—';
   $('timer').textContent='00:00.00';
-  if(mode==='free'){$('gateTotal').textContent='∞';$('missionTitle').textContent='03 / FREE FLIGHT';}
+  if(mode==='free'){$('gateTotal').textContent='∞';$('missionTitle').textContent='04 / FREE FLIGHT';}
   setStatus(mode==='trial'?'FLIGHT SYSTEMS ACTIVE':'READY FOR TAKEOFF');
-  notify(mode==='trial'?'SKY TRIAL // 12 GATES':'SYSTEMS ARMED // GOOD LUCK');
+  notify(mode==='showcase'?'STUNT DEMO // PRESS X FOR SUCTION LOOP':mode==='trial'?'SKY TRIAL // 12 GATES':'SYSTEMS ARMED // GOOD LUCK');
   last=performance.now();
 }
 function restart(){if(phase!=='menu')start();}
@@ -62,6 +63,18 @@ function toggleFlight(){
     state.speed=Math.max(state.speed,22);
     notify('ROCKET FLIGHT // ENGAGED');
   }
+}
+function toggleSuction(){
+  if(phase!=='playing'||state.loopActive)return;
+  state.suction=!state.suction;
+  notify(state.suction?'FAN GRIP // ARMED — HIT THE LOOP':'FAN GRIP // DISENGAGED');
+}
+function kickflip(){
+  if(phase!=='playing')return;
+  if(!state.flying||state.loopActive){notify('GET AIRBORNE TO KICKFLIP');return;}
+  if(spinActive)return;
+  spinActive=true;spinTime=0;
+  notify('KICKFLIP // INITIATED');
 }
 function finish(){
   if(phase!=='playing')return;
@@ -142,6 +155,8 @@ window.addEventListener('keydown',e=>{
   if(e.code==='Enter'&&phase==='paused'){resume();return;}
   if(e.code==='KeyR'&&phase==='playing'){restart();return;}
   if(e.code==='KeyF'){toggleFlight();return;}
+  if(e.code==='KeyX'){toggleSuction();return;}
+  if(e.code==='Space'){kickflip();return;}
   if(e.code==='KeyC'&&phase==='playing'){notify('CAMERA // '+world.cameraNext());return;}
   if(e.code==='KeyV'&&phase==='playing'){lookBack=true;return;}
   keys.add(e.code);
@@ -153,6 +168,8 @@ for(const b of document.querySelectorAll('.mobile-controls button')){
   const down=e=>{
     e.preventDefault();b.setPointerCapture?.(e.pointerId);
     if(b.dataset.action==='flight'){toggleFlight();return;}
+    if(b.dataset.action==='flip'){kickflip();return;}
+    if(b.dataset.action==='suction'){toggleSuction();return;}
     const code=b.dataset.action==='boost'?'Boost':b.dataset.key;
     if(code)keys.add(code);
   };
@@ -163,7 +180,20 @@ function tick(now){
   const dt=Math.min(Math.max(0,(now-last)/1000),.05);last=now;
   if(phase==='playing'){
     const previous={x:state.x,y:state.y,z:state.z};
+    const wasLoop=state.loopActive;
     state=physicsStep(state,keys,dt);
+    if(state.loopActive&&!wasLoop)notify('SUCTION LOCKED // INVERTED LOOP');
+    if(!state.loopActive&&wasLoop)notify('360° LOOP // COMPLETE');
+    if(spinActive){
+      spinTime+=dt;
+      const t=clamp(spinTime/1.18,0,1);
+      state.trickRoll=2*Math.PI*(t*t*(3-2*t));
+      if(t>=1){
+        spinActive=false;state.trickRoll=0;flipCount++;
+        $('flipCount').textContent=String(flipCount).padStart(2,'0');
+        notify('KICKFLIP '+String(flipCount).padStart(2,'0')+' // LANDED');
+      }
+    }
     if(mode!=='free'&&gates[state.gates]&&crossedGate(previous,state,gates[state.gates])){
       state.gates++;
       setStatus('GATE '+String(state.gates).padStart(2,'0')+' VERIFIED');

@@ -1,6 +1,7 @@
 export const MODES = {
   launch: { name: 'LAUNCH RUN', count: 6, startZ: 65, initialFlight: false },
   trial: { name: 'SKY TRIAL', count: 12, startZ: -140, initialFlight: true },
+  showcase: { name: 'REVEAL STUNT', count: 5, startZ: -165, initialFlight: false },
   free: { name: 'FREE FLIGHT', count: 0, startZ: 65, initialFlight: false }
 };
 export const MAX_DT = 0.05;
@@ -15,6 +16,7 @@ export function formatTime(seconds) {
 }
 export function makeGates(mode) {
   if (mode === 'free') return [];
+  if (mode === 'showcase') return [[0,5,-240],[0,108,-240],[0,26,-345],[0,40,-440],[0,8,-570]].map((p,i)=>({x:p[0],y:p[1],z:p[2],radius:16,id:i}));
   if (mode === 'launch') return [
     [0,4,-90], [0,24,-196], [-35,39,-300],
     [38,56,-424], [0,78,-540], [-25,104,-700]
@@ -45,10 +47,10 @@ export function freshState(mode) {
   return {
     x:0,y:config.initialFlight?30:1.25,z:config.startZ,
     heading:0,pitch:config.initialFlight?-.04:0,bank:0,
-    speed: config.initialFlight?33:0,vy:0,boost:100,
+    speed: mode==='showcase'?43:(config.initialFlight?33:0),vy:0,boost:100,
     flying:config.initialFlight, elapsed:0,gates:0,done:false,
     distance:0,mode:mode in MODES ? mode:'launch',
-    jumpReady:false
+    jumpReady:false,suction:false,loopActive:false,loopComplete:false,loopT:0,trickRoll:0
   };
 }
 export function physicsStep(state, keys, rawDt) {
@@ -65,8 +67,27 @@ export function physicsStep(state, keys, rawDt) {
   const maxSpeed=s.flying?140:82;
   s.speed=clamp(s.speed+(throttle*accel-brake*(s.flying?36:47)-5.5-s.speed*s.speed*drag*.06+(boosting?62:0))*dt,0,boosting?180:maxSpeed);
   s.boost=clamp(s.boost+(boosting?-30:8)*dt,0,100);
-  const steeringRate=s.flying?0.78:1.15;
+  const steeringRate=s.flying?0.78:(s.suction?1.58:1.15);
   s.heading+=steer*steeringRate*(s.flying?1:clamp(s.speed/22,0.12,1.0))*dt;
+  // Magnetically assisted loop inspired by the 2026 Roadster reveal:
+  // it is a deliberate arcade maneuver, not a real vehicle simulation.
+  if(s.mode==='showcase' && s.suction && !s.loopComplete &&
+     !s.loopActive && s.z< -222 && s.z> -265 && s.y<16 && s.speed>28){
+    s.loopActive=true;s.loopT=0;
+  }
+  if(s.loopActive){
+    s.loopT+=s.speed*dt/54;
+    const t=Math.min(Math.PI*2,s.loopT);
+    s.z=-240-54*Math.sin(t);
+    s.y=55.25-54*Math.cos(t);
+    s.x=0;s.pitch=t;s.heading=0;s.bank=0;s.vy=0;s.flying=true;
+    s.distance+=s.speed*dt;
+    if(s.loopT>=Math.PI*2){
+      s.loopActive=false;s.loopComplete=true;s.suction=false;
+      s.y=1.25;s.z=-240;s.pitch=0;s.flying=false;
+    }
+    return s;
+  }
   if(s.flying){
     const pitchInput=(keys.has('ArrowUp')?1:0)-(keys.has('ArrowDown')?1:0);
     s.pitch=clamp(s.pitch+pitchInput*0.62*dt,-0.75,0.75);

@@ -134,6 +134,39 @@ function makeWorld(scene){
     const x=(rand(i*21)-.5)*1900,z=(rand(i*31)-.6)*2000,y=125+rand(i*32)*260;
     for(let j=0;j<3;j++)ball(35+rand(i*11+j)*32,5+rand(i*7+j)*7,17+rand(i*9+j)*20,cloudMat,group,x+j*22,y+rand(i+j)*4,z);
   }
+  // A full inverted suction loop, physically traversable in STUNT DEMO mode.
+  // The centerline mirrors the ramp/overhang motion of the Roadster reveal.
+  const loopRadius=54,loopZ=-240,loopY=54;
+  const trackPoints=[],edgeL=[],edgeR=[],verts=[],indices=[],segments=100,trackHalf=10;
+  for(let i=0;i<=segments;i++){
+    const a=i/segments*Math.PI*2;
+    const z=loopZ-loopRadius*Math.sin(a),y=loopY-loopRadius*Math.cos(a);
+    verts.push(-trackHalf,y,z,trackHalf,y,z);
+    edgeL.push(V3(-trackHalf,y,z));edgeR.push(V3(trackHalf,y,z));
+    if(i<segments){const o=i*2;indices.push(o,o+1,o+2,o+1,o+3,o+2);}
+  }
+  const loopGeometry=new THREE.BufferGeometry();
+  loopGeometry.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
+  loopGeometry.setIndex(indices);loopGeometry.computeVertexNormals();
+  const loopSurface=mesh(loopGeometry,new THREE.MeshStandardMaterial({color:0x25313d,metalness:.48,roughness:.57,side:THREE.DoubleSide}),group);
+  for(const edge of [edgeL,edgeR]){
+    mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(edge),140,.19,7,false),redNeon,group);
+  }
+  for(let j=0;j<12;j++){
+    const a=j/12*Math.PI*2,z=loopZ-loopRadius*Math.sin(a),y=loopY-loopRadius*Math.cos(a);
+    const cross=box(20,.12,.28,cyanNeon,group,0,y,z);cross.rotation.x=a;
+  }
+  // Stunt reveal obstacle line-up: five cars to jump during the kickflip.
+  const demoRunway=box(48,.09,385,asphalt,group,0,-.19,-426);
+  for(const x of [-22,-11,0,11,22]){
+    const body=box(5,1.25,9,rough((x===0)?0xdfded9:0x313a49,.66,.3),group,x,.76,-444);
+    const top=ball(1.95,.7,2.6,rough(0x121e2e,.7,.21),group,x,1.65,-444);
+    box(4.0,.16,.14,glow(0xf9a4a4),group,x,.9,-439.4);
+    for(const side of [-2.15,2.15])for(const dz of [-3.2,3.2]){
+      const w=mesh(new THREE.CylinderGeometry(.78,.78,.3,18),rough(0x101318,.15,.85),group,[x+side,.45,-444+dz]);w.rotation.z=Math.PI/2;
+    }
+  }
+  for(const x of [-25,25])for(let z=-330;z>-610;z-=35)box(.2,.07,22,cyanNeon,group,x,.02,z);
   const landing=mesh(new THREE.CircleGeometry(14,48),new THREE.MeshBasicMaterial({color:0x283945,transparent:true,opacity:.9,side:THREE.DoubleSide}),group,[0,.04,65]);landing.rotation.x=-Math.PI/2;
   const runCircle=mesh(new THREE.RingGeometry(9.8,10.1,64),redNeon,group,[0,.06,65]);runCircle.rotation.x=-Math.PI/2;
   const runwaySign=box(16,4,.3,metal,group,0,7.7,101);
@@ -186,7 +219,8 @@ export function createWorld(canvas){
   function update(state,dt,activeGate=-1,boosting=false){
     lastState=state;frame++;
     car.position.set(state.x,state.y,state.z);
-    car.rotation.order='YXZ';car.rotation.set(state.pitch,state.heading,state.bank);
+    car.rotation.order='YXZ';car.rotation.set(state.pitch,state.heading,state.bank+(state.trickRoll||0));
+    car.userData.paint.color.setHex(state.mode==='showcase'?0xe8e4df:0xb70817);
     for(const w of car.userData.wheels)w.rotation.x+=state.speed*dt*.9;
     car.userData.jets.forEach((f,i)=>{f.visible=boosting;f.scale.y=boosting?(1.25+Math.sin(frame*.7+i*4)*.32):.2;});
     car.userData.underglow.material.opacity=.08+(boosting?.12:0);
