@@ -8,6 +8,17 @@ ARCHIVE="$ROOT/artifacts/roadster-v2-deploy.zip"
 command -v python3 >/dev/null
 command -v node >/dev/null
 cd "$ROOT"
+# Binary Three.js and fonts are deliberately packaged offline rather than
+# tracked in the Git tree. Restore them BEFORE the geometry test imports scene.mjs.
+python3 - "$ARCHIVE" <<'PYZIP'
+from pathlib import Path
+from zipfile import ZipFile
+import sys
+with ZipFile(sys.argv[1]) as archive:
+    for item in archive.namelist():
+        if item == 'game/three.module.min.js' or (item.startswith('game/font-') and item.endswith('.ttf')):
+            archive.extract(item, '.')
+PYZIP
 node --test tests/*.test.mjs
 for f in game/game.mjs game/scene.mjs game/physics.mjs game/research.mjs game/suspension.mjs game/vehicle.mjs; do node --check "$f"; done
 STAGE=$(mktemp -d "$ROOT/.v2-release-XXXXXXXX")
