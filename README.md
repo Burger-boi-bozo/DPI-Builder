@@ -24,7 +24,7 @@ WASD/arrow keys drive, Space provides upward cold-gas lift, Shift boosts, Q/E ro
 
 ## Run
 
-Serve `game/` as a static directory, e.g. `python3 -m http.server 18767 --directory game`. No build step. Self-contained ES modules and bundled Three.js + font assets; compatible with standard modern WebGL 2 browsers.
+After cloning, extract bundled offline dependencies with `python3 -m zipfile -e artifacts/roadster-v2-deploy.zip .`; then serve `game/` as a static directory, e.g. `python3 -m http.server 18767 --directory game`. No build step. Self-contained ES modules and bundled Three.js + font assets; compatible with standard modern WebGL 2 browsers.
 
 ## Tests
 
