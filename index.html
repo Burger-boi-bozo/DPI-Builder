@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#070d16"><meta name="description" content="Roadster Flight Lab — a high-speed, three-dimensional driving and flying stunt game.">
+<title>ROADSTER // FLIGHT LAB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head><body>
+<canvas id="world" aria-label="Three dimensional Roadster flight game"></canvas>
+<div class="grain"></div><div class="vignette"></div><div class="speed-lines" id="speedLines"></div>
+<header class="topbar">
+  <a class="brand" href="#" id="brand"><span class="brandmark">R<span class="brandcut">/</span>F</span><span class="brandstack">ROADSTER <small>FLIGHT LAB</small></span></a>
+  <div class="topright"><span class="status-dot"></span><span class="micro">SIMULATION ONLINE</span><span class="top-sep"></span><button class="top-button" id="soundBtn" aria-label="Toggle sound">SOUND OFF</button><button class="top-button" id="settingsBtn">CONTROLS <span class="external-arrow">↗</span></button></div>
+</header>
+<main>
+<section class="menu" id="menu">
+  <div class="hero">
+    <p class="eyebrow"><span class="red-rule"></span> THE NEXT ERA OF PERFORMANCE <span class="tiny-line"></span> EXPERIMENT 02</p>
+    <h1>DEFY<br><em>GRAVITY<span class="period">.</span></em></h1>
+    <p class="lede">Four wheels. A thousand possibilities. Push beyond the runway in a high-velocity Roadster flight simulator.</p>
+    <div class="hero-meta"><span><b>03</b> FLIGHT PROGRAMS</span><span><b>3D</b> OPEN WORLD</span><span><b>∞</b> SECOND CHANCES</span></div>
+    <div class="select-label">01 / SELECT YOUR PROGRAM</div>
+    <div class="modes" id="modeSelect">
+      <button class="mode active" data-mode="launch"><span class="mode-number">01 // TRACK & SKY</span><strong>LAUNCH RUN</strong><span class="mode-desc">Accelerate, hit the ramp, thread the gates.</span><span class="mode-tick">↗</span></button>
+      <button class="mode" data-mode="trial"><span class="mode-number">02 // PRECISION</span><strong>SKY TRIAL</strong><span class="mode-desc">Twelve aerial checkpoints. One perfect run.</span><span class="mode-tick">↗</span></button>
+      <button class="mode" data-mode="free"><span class="mode-number">03 // EXPLORE</span><strong>FREE FLIGHT</strong><span class="mode-desc">No clock, no course. Just you and the sky.</span><span class="mode-tick">↗</span></button>
+    </div>
+    <div class="launch-actions"><button id="playBtn" class="launch-btn"><span>INITIATE LAUNCH</span><span class="launch-icon">↗</span></button><span class="keys-hint">WASD TO DRIVE <span>·</span> F TO FLY <span>·</span> SHIFT TO BOOST</span></div>
+  </div>
+  <div class="hero-side"><div class="vertical-label">PROTOTYPE / 002 <span>EST. 2026</span></div><div class="side-instrument"><div class="tech-cross">+</div><div class="gauge"><span class="gauge-text">FLIGHT SYSTEMS</span><strong>READY</strong><div class="gauge-track"><i></i></div><span class="gauge-fine">ALL PARAMETERS NOMINAL</span></div></div></div>
+</section>
+<section class="hud hidden" id="hud">
+  <div class="hud-left"><div class="hud-section-label"><span class="red-rule"></span> R / F <span class="slash">—</span> LIVE TELEMETRY</div><div class="speed-readout"><span id="speed">000</span><div class="speed-unit">KM/H <span>GROUND SPEED</span></div></div><div class="telemetry-row"><div class="telemetry"><span>ALTITUDE</span><strong id="altitude">0000 <small>M</small></strong></div><div class="telemetry"><span>VERTICAL SPEED</span><strong id="vertical">+0.0 <small>M/S</small></strong></div><div class="telemetry"><span>FLIGHT MODE</span><strong id="flightState">DRIVE</strong></div></div><div class="boost-label"><span>ROCKET CAPACITY</span><strong id="boostPercent">100%</strong></div><div class="boost-track"><div id="boostBar"></div></div></div>
+  <div class="hud-center"><div class="reticle"><div class="reticle-center">+</div><span class="reticle-n">N</span><span class="reticle-e">E</span><span class="reticle-s">S</span><span class="reticle-w">W</span></div><span id="targetHint" class="target-hint">ALIGN WITH CHECKPOINT</span></div>
+  <div class="hud-right"><div class="hud-mission-tag" id="missionTitle">01 / LAUNCH RUN</div><div class="mission-number"><span id="gateCurrent">0</span><span class="of">/</span><span id="gateTotal">06</span><span class="mission-caption">GATES</span></div><div class="mission-timer" id="timer">00:00.00</div><div class="mission-best">PERSONAL BEST <strong id="bestTime">—</strong></div><button class="reset-btn" id="resetBtn">↻ RESTART RUN</button></div>
+  <div class="hud-footer"><div class="hud-status"><span class="status-dot"></span><span id="statusText">READY FOR TAKEOFF</span></div><span class="hud-controls">WASD DRIVE <b>/</b> F FLIGHT <b>/</b> ↑ ↓ PITCH <b>/</b> Q E ROLL <b>/</b> SHIFT BOOST <b>/</b> C CAMERA <b>/</b> ESC PAUSE</span></div>
+  <div class="mobile-controls" id="mobileControls"><div class="mobile-pair"><button data-key="KeyA">◀</button><button data-key="KeyD">▶</button></div><div class="mobile-center"><button data-action="flight">FLIGHT</button><button data-action="boost" class="touch-boost">BOOST</button></div><div class="mobile-pair"><button data-key="ArrowUp">▲</button><button data-key="KeyW">GO</button><button data-key="ArrowDown">▼</button></div></div>
+</section>
+</main>
+<div class="toast" id="toast" role="status"></div>
+<section class="overlay hidden" id="pauseOverlay"><div class="overlay-panel"><p class="eyebrow"><span class="red-rule"></span> SYSTEM HALTED</p><h2>PAUSED<span class="period">.</span></h2><p>All flight parameters held. Resume whenever you're ready.</p><button id="resumeBtn" class="launch-btn">RESUME FLIGHT <span>↗</span></button><button id="menuBtn" class="secondary-btn">RETURN TO HANGAR</button></div></section>
+<section class="overlay hidden" id="resultOverlay"><div class="overlay-panel"><p class="eyebrow"><span class="red-rule"></span> MISSION COMPLETED</p><h2>RUN<br><em>COMPLETE<span class="period">.</span></em></h2><div class="result-time" id="resultTime">00:00.00</div><p id="resultMessage">A new benchmark.</p><button id="againBtn" class="launch-btn">RUN IT BACK <span>↗</span></button><button id="resultMenuBtn" class="secondary-btn">RETURN TO HANGAR</button></div></section>
+<section class="overlay hidden" id="controlsOverlay"><div class="overlay-panel controls-panel"><p class="eyebrow"><span class="red-rule"></span> PILOT'S MANUAL</p><h2>CONTROLS<span class="period">.</span></h2><div class="control-grid"><span>W / S</span><p>Accelerate / brake</p><span>A / D</span><p>Steer / yaw</p><span>F</span><p>Toggle flight systems</p><span>↑ / ↓</span><p>Pitch up / down</p><span>Q / E</span><p>Roll in flight</p><span>SHIFT</span><p>Rocket boost</p><span>C / V</span><p>Change camera / look back</p><span>R / ESC</span><p>Restart / pause</p></div><button id="closeControlsBtn" class="launch-btn">UNDERSTOOD <span>↗</span></button></div></section>
+<footer class="footer" id="footer"><span>AN UNOFFICIAL INTERACTIVE CONCEPT</span><span>BUILT FOR THE LIMITS BEYOND</span><span>V2.0 / EXPERIMENTAL</span></footer>
+<script type="module" src="/src/main.js"></script>
+</body></html>
