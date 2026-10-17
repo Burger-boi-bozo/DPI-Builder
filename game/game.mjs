@@ -2,6 +2,7 @@ import {createScene} from './scene.mjs';
 import {createState,step,resetPosition,GATES,LOOP,clamp,heightAt,missionGateCount} from './physics.mjs';
 import {makeResearchState,stepResearch,RESEARCH_STAGES,setPrecision,makeDynamicsState} from './research.mjs';
 import {createSuspension,suspensionStep,SUSPENSION} from './suspension.mjs';
+import {makeVehicleDynamics} from './vehicle.mjs';
 
 const $=id=>document.getElementById(id);
 let world;
@@ -35,7 +36,7 @@ function initialize(w){
  function displayCallout(title,sub='',duration=2){$('callout').querySelector('strong').textContent=title;$('callout').querySelector('span').textContent=sub;calloutTime=duration;$('callout').classList.add('show');}
  function updateGateStyle(){const racing=state.mode==='trial'||state.mode==='launch';gates.forEach((g,i)=>{g.group.visible=racing?i<missionGateCount(state.mode)&&i>=state.gate&&i<=state.gate+2:state.mode==='free';g.ring.material.color.set(i===state.gate&&racing?0xe4ff95:0xab97db);g.number.visible=racing&&i<missionGateCount(state.mode);});gateGroup.visible=phase==='menu'||(state.mode!=='stunt'&&!isResearchMode(state.mode));}
  function start(){
-   closeDialogs();clearKeys();state=selectedMode==='research'?makeResearchState():selectedMode==='dynamics'?makeDynamicsState():createState(selectedMode);suspension=createSuspension();recording=[];recordTimer=0;ghostTrack=[];flightLog=[];trace=[];logTimer=0;replayElapsed=0;replayPlaying=false;
+   closeDialogs();clearKeys();state=selectedMode==='research'?makeResearchState():selectedMode==='dynamics'?makeDynamicsState():createState(selectedMode);suspension=createSuspension();if(selectedMode==='dynamics')state.drivetrain=makeVehicleDynamics();recording=[];recordTimer=0;ghostTrack=[];flightLog=[];trace=[];logTimer=0;replayElapsed=0;replayPlaying=false;
    $('replayPanel').classList.add('hidden');$('researchPanel').classList.toggle('hidden',!isResearchMode(state.mode));$('app').dataset.mode=state.mode;w.setResearchPhase(isResearchMode(state.mode),state.stage||0);
    try{ghostTrack=JSON.parse(localStorage.getItem(ghostKey(state.mode))||'[]');if(!Array.isArray(ghostTrack))ghostTrack=[];}catch{ghostTrack=[];}
    w.setGhostPose(null);setPhase('countdown');countdown=3;accumulator=0;cameraMode=0;
@@ -85,7 +86,7 @@ function initialize(w){
    $('suctionState').textContent=state.suction?'ON':'OFF';$('cameraName').textContent=['CHASE CAM','HOOD CAM','WIDE CAM'][cameraMode];
    speedTicks.forEach((t,i)=>t.classList.toggle('lit',i<Math.abs(state.speed)/91*22));
    if(isResearchMode(state.mode)){
-     const target=state.mode==='dynamics'?{name:'DAMPER / SURFACE LAB',detail:'Drive straight. Feel the speed humps, washboard and cross-axle rut in the chassis response.'}:RESEARCH_STAGES[Math.min(state.stage,4)];
+     const target=state.mode==='dynamics'?{name:'DAMPER / SURFACE LAB',detail:'Explore the test strip. Steer, brake and study load transfer, wet grip, tire slip and suspension travel.'}:RESEARCH_STAGES[Math.min(state.stage,4)];
      $('objective').innerHTML=state.mode==='dynamics'?'SUSPENSION PROVING GROUND':`${target.name} <span>/ ${String(Math.min(state.stage+1,5)).padStart(2,'0')} OF 05</span>`;
      $('guidance').textContent=target.detail;updateResearchHud(target);
    }else if(state.mode==='trial'||state.mode==='launch'){
@@ -118,6 +119,19 @@ function initialize(w){
       $('corner'+i+'Travel').style.height=(14+Math.round(80*(suspension.compression[i]/SUSPENSION.maxCompression)))+'%';
       $('corner'+i).classList.toggle('no-contact',suspension.normalForces[i]<1);
    }
+   const d=state.drivetrain;
+   $('dynamicsModule').classList.toggle('hidden',state.mode!=='dynamics');
+   if(d&&state.mode==='dynamics'){
+      $('driveSoc').textContent=d.soc.toFixed(1)+'%';
+      $('drivePower').textContent=(d.powerKw-d.regenKw).toFixed(0)+' kW';
+      $('driveSteer').textContent=(d.steerAngle*180/Math.PI).toFixed(1)+'°';
+      $('driveSlip').textContent=(Math.atan2(d.velocityLateral,Math.max(2,Math.abs(d.velocityForward)))*180/Math.PI).toFixed(1)+'°';
+      $('driveTire').textContent=(d.tireTemperature.reduce((a,b)=>a+b,0)/4).toFixed(0)+'°C';
+      $('driveBrake').textContent=(d.brakeTemperature.reduce((a,b)=>a+b,0)/4).toFixed(0)+'°C';
+      $('driveGrip').textContent=(d.gripUtilization*100).toFixed(0)+'%';
+      $('driveSafety').textContent=d.absActive?'ABS ACTIVE':d.escActive?'ESC CORRECTING':d.contactImpacts?'FRAME IMPACT '+d.contactImpacts:'FULL TRACTION';
+      $('surfaceToggle').textContent=state.roadMu<.7?'ROAD / WET':'ROAD / DRY';
+   }
    $('researchStageNumber').style.color=state.structural<35?'#ff978a':'#b5eaf4';
    $('horizonGround').style.transform=`translateY(${clamp(state.pitch+suspension.pitch,-.3,.3)*130}px) rotate(${clamp(state.roll+suspension.roll,-.45,.45)*180/Math.PI}deg)`;
    $('precisionButton').classList.toggle('selected',state.precision);$('assistButton').classList.toggle('selected',state.assist);
@@ -139,11 +153,12 @@ function initialize(w){
    }
    c.font='9px monospace';c.fillStyle='#a9f0ff';c.fillText('ALT',7,12);c.fillStyle='#d7a8ff';c.fillText('THRUST',42,12);
  }
+ function toggleSurface(){if(state.mode!=='dynamics')return;state.roadMu=state.roadMu<.7?1.06:.54;displayCallout(state.roadMu<.7?'WET TEST SURFACE':'DRY TEST SURFACE',state.roadMu<.7?'LESS GRIP / LONGER BRAKING DISTANCE':'FULL TIRE ADHESION',1.6);}
  function togglePrecision(){if(!isResearchMode(state.mode)||phase!=='running')return;setPrecision(state,!state.precision);displayCallout(state.precision?'ALTITUDE HOLD ENGAGED':'MANUAL VERTICAL CONTROL',state.precision?'PROPELLANT CONSUMPTION CONTINUES':'BALLISTIC DESCENT',1.5);}
  function toggleAssist(){if(!isResearchMode(state.mode)||phase!=='running')return;state.assist=!state.assist;displayCallout(state.assist?'STABILITY AUGMENTATION ON':'DIRECT THRUSTER RESPONSE',state.assist?'WIND COMPENSATION ENABLED':'MANUAL CORRECTION REQUIRED',1.5);}
  function captureData(){
    if(!lastFlightLog.length)return;
-   const columns=['seconds','x_m','altitude_m','z_m','yaw_rad','pitch_rad','roll_rad','vx_ms','vy_ms','vz_ms','thrust_g','propellant_kg','nozzle_C','airframe_percent','stage','FL_travel_m','FR_travel_m','RL_travel_m','RR_travel_m','FL_normal_N','FR_normal_N','RL_normal_N','RR_normal_N','chassis_heave_m','chassis_pitch_rad','chassis_roll_rad'];
+   const columns=['seconds','x_m','altitude_m','z_m','yaw_rad','pitch_rad','roll_rad','vx_ms','vy_ms','vz_ms','thrust_g','propellant_kg','nozzle_C','airframe_percent','stage','FL_travel_m','FR_travel_m','RL_travel_m','RR_travel_m','FL_normal_N','FR_normal_N','RL_normal_N','RR_normal_N','chassis_heave_m','chassis_pitch_rad','chassis_roll_rad','battery_soc_pct','motor_power_kw','regen_kw','yaw_rate_rads','rack_steer_rad','grip_utilization','FL_tire_C','FR_tire_C','RL_tire_C','RR_tire_C','front_brake_C','rear_brake_C','rail_impacts'];
    const rows=[columns.join(','),...lastFlightLog.map(row=>row.map(v=>typeof v==='number'?v.toFixed(3):v).join(','))];
    const uri=URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv;charset=utf-8'}));
    const a=document.createElement('a');a.href=uri;a.download='roadster-xflight-blackbox-'+Date.now()+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(uri),1000);
@@ -185,6 +200,7 @@ function initialize(w){
      if(car.userData.springs)car.userData.springs.forEach(({carrier,strut,piston,spring},i)=>{
        const travel=suspension.wheelTravel[i];
        carrier.position.y=travel;
+       carrier.rotation.y=state.drivetrain&&i<2?state.drivetrain.steerAngle:0;
        piston.position.y=-.35+travel*.35;spring.position.y=-.16+travel*.18;
        spring.scale.set(1,1,Math.max(.65,1-travel*.8));
      });
@@ -216,7 +232,7 @@ function initialize(w){
    positionCamera(dt);if(phase==='menu')car.userData.body.rotation.set(0,0,0);
    const active=phase==='running';
    if(active&&isResearchMode(state.mode)){
-     logTimer+=dt;if(logTimer>=.05){logTimer=0;const sample=[state.time,state.x,state.y,state.z,state.yaw,state.pitch,state.roll,state.vx,state.vy,state.vz,state.thrustG,state.propellant,state.temperature,state.structural,state.stage,...suspension.wheelTravel,...suspension.normalForces,suspension.heave,suspension.pitch,suspension.roll];
+     logTimer+=dt;if(logTimer>=.05){logTimer=0;const d=state.drivetrain;const sample=[state.time,state.x,state.y,state.z,state.yaw,state.pitch,state.roll,state.vx,state.vy,state.vz,state.thrustG,state.propellant,state.temperature,state.structural,state.stage,...suspension.wheelTravel,...suspension.normalForces,suspension.heave,suspension.pitch,suspension.roll,d?.soc??0,d?.powerKw??0,d?.regenKw??0,d?.yawRate??0,d?.steerAngle??0,d?.gripUtilization??0,...(d?.tireTemperature??[0,0,0,0]),d?.brakeTemperature?.[0]??0,d?.brakeTemperature?.[2]??0,d?.contactImpacts??0];
        if(flightLog.length<3600)flightLog.push(sample);trace.push([state.time,state.y,state.thrustG]);if(trace.length>180)trace.shift();}
    }
    if(active&&['trial','launch'].includes(state.mode)){
@@ -251,7 +267,7 @@ function initialize(w){
    $('telemetryToggle').setAttribute('aria-expanded',String(!opened));
    $('telemetryToggle').textContent=opened?'SHOW SYSTEMS':'HIDE SYSTEMS';
  });
- const gameKeys=new Set(['KeyZ','KeyG','KeyJ','KeyL','KeyT','KeyH','KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','ShiftRight','KeyQ','KeyE','KeyF','KeyC','KeyR']);
+ const gameKeys=new Set(['KeyY','KeyZ','KeyG','KeyJ','KeyL','KeyT','KeyH','KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','ShiftRight','KeyQ','KeyE','KeyF','KeyC','KeyR']);
  window.addEventListener('keydown',e=>{
    if(e.code==='KeyM'&&!e.repeat){toggleSound();return;}
    if(e.code==='KeyT'&&!e.repeat){cycleEnvironment();return;}
@@ -260,7 +276,7 @@ function initialize(w){
    if(e.code==='Escape'||e.code==='KeyP'){if(phase==='paused'){e.preventDefault();resume();}else if(phase==='running'||phase==='countdown'){e.preventDefault();pause();}return;}
    if(phase!=='running'&&phase!=='countdown')return;
    if(gameKeys.has(e.code))e.preventDefault();keys.add(e.code);
-   if(!e.repeat){if(e.code==='KeyZ'){togglePrecision();return;}if(e.code==='KeyG'){toggleAssist();return;}if(e.code==='KeyQ')rollInput=1;if(e.code==='KeyE')rollInput=-1;if(e.code==='KeyC'){cameraMode=(cameraMode+1)%3;positionCamera(1,true);}if(e.code==='KeyF'){state.suction=!state.suction;displayCallout(state.suction?'SUCTION ENABLED':'SUCTION OFF',state.suction?'WEST LOOP READY':'FREE ROLLING',1.3);}if(e.code==='KeyR'){if(isResearchMode(state.mode)){start();return;}resetPosition(state,phase==='running');positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);}}
+   if(!e.repeat){if(e.code==='KeyY'&&state.mode==='dynamics'){toggleSurface();return;}if(e.code==='KeyZ'){togglePrecision();return;}if(e.code==='KeyG'){toggleAssist();return;}if(e.code==='KeyQ')rollInput=1;if(e.code==='KeyE')rollInput=-1;if(e.code==='KeyC'){cameraMode=(cameraMode+1)%3;positionCamera(1,true);}if(e.code==='KeyF'){state.suction=!state.suction;displayCallout(state.suction?'SUCTION ENABLED':'SUCTION OFF',state.suction?'WEST LOOP READY':'FREE ROLLING',1.3);}if(e.code==='KeyR'){if(isResearchMode(state.mode)){start();return;}resetPosition(state,phase==='running');positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);}}
  });
  window.addEventListener('keyup',e=>keys.delete(e.code));
  window.addEventListener('blur',()=>{clearKeys();pause();});
@@ -271,6 +287,7 @@ function initialize(w){
  }
  document.querySelector('[data-action="roll"]').addEventListener('pointerdown',e=>{e.preventDefault();rollInput=1;});
  document.querySelector('[data-action="reset"]').addEventListener('pointerdown',e=>{e.preventDefault();if(phase!=='running')return;if(isResearchMode(state.mode)){start();return;}resetPosition(state);positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);});
+ $('surfaceToggle').addEventListener('click',toggleSurface);
  $('precisionButton').addEventListener('click',togglePrecision);$('assistButton').addEventListener('click',toggleAssist);
  document.querySelector('[data-action="precision"]').addEventListener('pointerdown',e=>{e.preventDefault();togglePrecision();});
  document.querySelector('[data-action="stabilize"]').addEventListener('pointerdown',e=>{e.preventDefault();toggleAssist();});

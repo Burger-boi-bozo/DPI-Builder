@@ -11,9 +11,18 @@ function mesh(geo,material,parent,x=0,y=0,z=0){const m=new T.Mesh(geo,material);
 function box(parent,w,h,d,material,x=0,y=0,z=0){return mesh(new T.BoxGeometry(w,h,d),material,parent,x,y,z);}
 function sections(parent,items,bottom,material){
   const vertices=[],indices=[];
-  for(const [z,w,h] of items)vertices.push(-w,bottom,z,w,bottom,z,w,h,z,-w,h,z);
-  for(let i=0;i<items.length-1;i++)for(let j=0;j<4;j++){const a=i*4+j,b=i*4+(j+1)%4,c=b+4,d=a+4;indices.push(a,b,d,b,c,d);}
-  indices.push(0,3,1,1,3,2);const n=items.length*4-4;indices.push(n,n+1,n+3,n+1,n+2,n+3);
+  // Cubic subdivision removes the faceted silhouette of the original
+  // five-station blockout without a heavy imported mesh.
+  const smooth=[];
+  for(let j=0;j<items.length-1;j++)for(let k=0;k<5;k++){
+    const t=k/5,a=items[Math.max(0,j-1)],b=items[j],c=items[j+1],d=items[Math.min(items.length-1,j+2)];
+    const interp=n=>{const m0=(c[n]-a[n])*.5,m1=(d[n]-b[n])*.5;return (2*t*t*t-3*t*t+1)*b[n]+(t*t*t-2*t*t+t)*m0+(-2*t*t*t+3*t*t)*c[n]+(t*t*t-t*t)*m1;};
+    smooth.push([interp(0),Math.max(.1,interp(1)),interp(2)]);
+  }
+  smooth.push(items.at(-1));
+  for(const [z,w,h] of smooth)vertices.push(-w,bottom,z,w,bottom,z,w,h,z,-w,h,z);
+  for(let i=0;i<smooth.length-1;i++)for(let j=0;j<4;j++){const a=i*4+j,b=i*4+(j+1)%4,c=b+4,d=a+4;indices.push(a,b,d,b,c,d);}
+  indices.push(0,3,1,1,3,2);const n=smooth.length*4-4;indices.push(n,n+1,n+3,n+1,n+2,n+3);
   const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geo.setIndex(indices);geo.computeVertexNormals();return mesh(geo,material,parent);
 }
 function line(parent,points,color=0xbda2f3){const g=new T.BufferGeometry().setFromPoints(points.map(p=>new T.Vector3(...p)));const l=new T.Line(g,new T.LineBasicMaterial({color}));parent.add(l);return l;}
@@ -54,6 +63,22 @@ export function makeCar(color=0xdfe6ea,simple=false){
     const rotor=box(body,.23,.07,.24,metal,x,.43,-1.94);rotor.rotation.y=x*.13;
     const wedge=box(body,.25,.09,.17,carbon,x,.25,2.1);wedge.rotation.y=x*.09;
   }
+  // Sculpted splitter, hood creases, side sills and independent light lenses.
+  const carbonDetail=mat(0x090e13,.42,.58),lampLens=new T.MeshPhysicalMaterial({color:0xc8e9ff,metalness:.18,roughness:.09,clearcoat:1,transparent:true,opacity:.85});
+  box(body,2.14,.055,.18,carbonDetail,0,.27,-2.41);
+  box(body,1.8,.035,.08,carbonDetail,0,.23,2.44);
+  for(const side of [-1,1]){
+    line(body,[[side*.53,.84,-2.09],[side*.70,.91,-1.43],[side*.86,.91,-.92]],0x8eacb9);
+    line(body,[[side*.97,.83,-.57],[side*1.08,.69,-.20],[side*1.08,.68,1.18]],0x526473);
+    line(body,[[side*.92,.83,1.34],[side*.69,.85,2.10]],0x9db6c3);
+    const strip=box(body,.62,.044,.075,lampLens,side*.60,.81,-2.34);strip.rotation.y=side*.13;
+    const scoop=box(body,.1,.15,.72,carbonDetail,side*1.15,.46,1.15);scoop.rotation.y=side*.1;
+    box(body,.12,.045,2.8,carbonDetail,side*1.08,.31,.18);
+  }
+  // Vent arrays are inside the outer bumper and bodywork, not fake rockets.
+  for(let i=0;i<9;i++)for(const side of [-1,1]){
+    box(body,.02,.012,.042,carbonDetail,side*(.54+i*.052),.84,-2.25+i*.01);
+  }
   const wheels=[],springs=[];
   for(const x of [-1.08,1.08])for(const z of [-1.48,1.45]){
     const wheel=new T.Group();wheel.position.set(x,.45,z);body.add(wheel);
@@ -61,8 +86,9 @@ export function makeCar(color=0xdfe6ea,simple=false){
     const rim=mesh(new T.CylinderGeometry(.31,.31,.37,24),dark,wheel);rim.rotation.z=Math.PI/2;
     const outer=x>0?.188:-.188;
     const ring=mesh(new T.TorusGeometry(.315,.027,6,24),metal,wheel,outer,0,0);ring.rotation.y=Math.PI/2;
+    let caliper;
     if(!simple){
-      const caliper=box(wheel,.04,.21,.1,mat(0xca3349,.5,.4),outer*.7,.04,.21);
+      caliper=box(wheel,.04,.21,.1,mat(0xca3349,.5,.4),outer*.7,.04,.21);
       for(let k=0;k<7;k++){const a=k/7*Math.PI*2;const spoke=box(wheel,.04,.48,.043,metal,outer,0,0);spoke.rotation.x=a;}
     }
     const cap=mesh(new T.CylinderGeometry(.08,.08,.39,12),metal,wheel);cap.rotation.z=Math.PI/2;
@@ -72,6 +98,20 @@ export function makeCar(color=0xdfe6ea,simple=false){
     const piston=mesh(new T.CylinderGeometry(.033,.033,.32,10),dark,strut);piston.position.y=-.35;
     const spring=mesh(new T.TorusGeometry(.073,.017,5,10),glow(0xe5b7ff),strut);spring.rotation.x=Math.PI/2;spring.position.y=-.16;
     const carrier=new T.Group();carrier.add(wheel);body.add(carrier);carrier.position.set(x,0,z);wheel.position.set(0,.45,0);
+    // Calipers mount to the hub carrier, not the rotating tire.
+    if(caliper){carrier.add(caliper);caliper.position.set(outer*.7,.49,.21);}
+    if(!simple){
+      const rotor=mesh(new T.CylinderGeometry(.355,.355,.020,40),mat(0x818d99,.34,.72),wheel,outer*.58,0,0);rotor.rotation.z=Math.PI/2;
+      for(const offset of [-.16,.16]){
+        const ridge=mesh(new T.TorusGeometry(.428,.009,4,36),carbonDetail,wheel,offset,0,0);ridge.rotation.y=Math.PI/2;
+      }
+      for(let k=0;k<20;k++){
+        const angle=k*Math.PI/10,groove=box(wheel,.20,.017,.09,carbonDetail,0,Math.sin(angle)*.448,Math.cos(angle)*.448);groove.rotation.x=-angle;
+      }
+      // Thin arms behind each wheel visibly connect the hub to the chassis.
+      const link=box(carrier,.48,.038,.055,metal,-x*.18,.59,.10);link.rotation.z=(x<0?-.17:.17);
+      const link2=box(carrier,.43,.045,.06,dark,-x*.19,.32,-.14);link2.rotation.z=(x<0?.12:-.12);
+    }
     // remove first parent so the carrier owns the wheel / steering pivot.
     springs.push({strut,guide,piston,spring,carrier});wheels.push(wheel);
   }
@@ -193,6 +233,15 @@ export function createScene(container){
   stripGeometry.computeVertexNormals();
   const proving=new T.Mesh(stripGeometry,mat(0x2b323f,.8,.08));proving.position.set(64,0,-18.5);proving.receiveShadow=true;scene.add(proving);
   for(const side of [-8.5,8.5])line(scene,[[64+side,.055,86],[64+side,.055,-123]],0xffba8f);
+  // Concrete crash rails match the collision boundaries in the dynamics solver.
+  for(const side of [-10.1,10.1]){
+    for(let z=79;z>-117;z-=6){
+      box(scene,.33,.78,5.85,mat(0x707c86,.83,.18),64+side,.43,z);
+      box(scene,.36,.09,5.85,metal,64+side,.88,z);
+    }
+    line(scene,[[64+side,.96,86],[64+side,.96,-120]],0xd3eef1);
+  }
+
   for(const z of [56,38,20,-3,-67,-76,-115]){
     const sign=makeLabel(z>0?'DAMPER / IMPULSE':z>-67?'WASHBOARD / COMPLIANCE':'CROSS-AXLE / RUT','#ffedcf');
     sign.position.set(78,2,z);sign.scale.set(16,3.2,1);scene.add(sign);

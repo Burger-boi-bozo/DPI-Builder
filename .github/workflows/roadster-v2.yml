@@ -21,6 +21,7 @@ jobs:
           node --check game/physics.mjs
           node --check game/research.mjs
           node --check game/suspension.mjs
+          node --check game/vehicle.mjs
           node --test tests/*.test.mjs
       - name: Verify self-contained release assets
         run: |
@@ -28,5 +29,6 @@ jobs:
           test -s game/FONTS-OFL-1.1.txt
           test -s game/research.mjs
           test -s game/suspension.mjs
+          test -s game/vehicle.mjs
           test -s artifacts/roadster-v2-deploy.zip
-          grep -q 'Roadster / Experimental Flight V2.6' game/index.html
+          grep -q 'Roadster / Experimental Flight V2.7' game/index.html

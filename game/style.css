@@ -123,3 +123,8 @@
 
 /* Axle schematic follows actual front and rear wheel placement. */
 .suspension-mini{grid-template-columns:1fr 1fr;max-width:245px;gap:8px}.suspension-axle{display:contents}.suspension-frame{display:none}
+
+/* V2.7: restrained engineering readouts, only visible in the systems drawer. */
+.vehicle-diagnostics{border:1px solid #b8d1d83c;border-radius:10px;background:#122a35;padding:12px;margin:0 0 14px}.diag-head{font-size:10px;letter-spacing:.08em;font-weight:700;color:#ecf7f9;display:flex;justify-content:space-between;gap:5px}.diag-head small{font-size:8px;color:#a1b9c6;font-weight:400;letter-spacing:0}.diag-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:12px}.diag-grid>div{background:#071925;border:1px solid #7397a326;border-radius:7px;padding:8px}.diag-grid span{display:block;font-size:8px;letter-spacing:.075em;color:#9fbcc5}.diag-grid b{font-variant-numeric:tabular-nums;display:block;margin-top:5px;font-size:15px;font-family:ui-monospace,Menlo,monospace;color:#e7f9fc}.vehicle-diagnostics p{font-size:9px;line-height:1.5;color:#a7bec7;margin:12px 0 0}.hidden.vehicle-diagnostics{display:none!important}
+
+.surface-toggle{margin-top:10px;background:#133647;border:1px solid #b3d4e14a;color:#d8f5ff;border-radius:7px;padding:9px 13px;font-size:10px;font-weight:700;letter-spacing:.07em;cursor:pointer}.surface-toggle:hover,.surface-toggle:focus-visible{background:#25536a}

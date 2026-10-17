@@ -1,4 +1,4 @@
-# Roadster X-Flight — Experimental Flight Lab V2.5
+# Roadster X-Flight — Experimental Flight Lab V2.7
 
 A self-hosted, original experimental-flight concept built on the recovered Roadster Flight Lab V1. This is **not** a physics-validated Tesla Roadster representation. Thruster characteristics, mass, aerodynamics, structural/thermal limits, and safety systems are hypothetical parameters designed for a playable R&D simulator. Not affiliated with Tesla or SpaceX.
 
@@ -23,7 +23,7 @@ The live R&D instrument suite includes attitude/horizon indicator, vertical velo
 - **Launch Sprint:** six-gate timed short course; translucent personal-best ghost.
 - **Free Roam:** original test-range playground and unlimited arcade cold-gas lift.
 
-## V2.5 visual and usability upgrades
+## V2.7 visual and usability upgrades
 
 - Research campus with launch and docking pads, lit telemetry gates, wind-shear vanes, calibration sensors, expanded instrumentation and animated cold-gas exhaust.
 - More physically based metallic clearcoat Roadster concept body panels, surface detail, terrain/asphalt procedural textures, smooth lighting and distinct day/night profiles.
@@ -40,7 +40,7 @@ Serve `game/` as a static directory. For example: `python3 -m http.server 18767 
 
 ## Test and deploy
 
-`node --test tests/*.test.mjs` runs 27 deterministic tests (11 original V1 physics, 4 V2 heritage, 12 new flight-model tests). `node --check game/*.mjs` verifies syntax. UI logic is additionally tested using a mocked renderer to exercise flight startup, telemetry, hover controller and checkpoint reset. **Full visual/WebGL playtesting on a GPU-enabled browser is still required.** Headless Chromium in the working sandbox could not establish a WebGL context.
+`node --test tests/*.test.mjs` runs 47 deterministic checks across V1 heritage physics, flight certification, suspension, four-contact-patch tire dynamics, collisions, and CPU-level 3D model integrity. `node --check game/*.mjs` verifies syntax. UI logic is additionally tested using a mocked renderer to exercise flight startup, telemetry, hover controller and checkpoint reset. **Full visual/WebGL playtesting on a GPU-enabled browser is still required.** The working sandbox blocks full WebGL; automated browser UI interactions use a renderer stub, while all 3D meshes receive direct CPU-level geometry integrity tests. GPU-rendered QA remains outstanding.
 
 Production: Proxmox `pve` at `/opt/roadster-flight`, service `roadster-flight.service`, loopback port `18767`, Cloudflare `https://fly.dpifiles.org`. Run `bash deploy/install-on-proxmox.sh` as root from a current `roadster-flight-v2` checkout to test, back up the previous version and swap in the self-contained archive. Source branch and release archive remain synchronized.
 
@@ -58,3 +58,11 @@ Three.js notice: `game/THREE-LICENSE.txt`; font licenses: `game/FONTS-OFL-1.1.tx
 - X-Flight telemetry CSV now includes four wheel strokes, four normal forces, chassis heave, pitch and roll.
 
 The physics is a high-fidelity *concept-level* sprung-body simulation, not an OEM engineering model or a validated multibody tire simulation. Real Roadster suspension specifications, geometry, and empirical tire coefficients are not available. No claim of photorealism or experimentally validated Tesla performance is made.
+
+## V2.7 — Tyre grip, collision and chassis fidelity
+
+- The Suspension Lab now uses a separate four-contact-patch AWD model rather than a prescribed car heading. Each tire receives its instantaneous suspension load, Ackermann-like rack steer input, combined friction-limited longitudinal/lateral forces, wheel angular dynamics and slip response. Tire forces integrate a yaw moment against chassis inertia; steering with zero forward motion cannot spin the car in place.
+- Tire/road coefficients can be switched between DRY and WET in the engineering instruments (`Y`). ABS saturation, corrective stability control, wheel slip, regenerative braking, effective electric-drive power, battery SOC, rotor heat and tire heat are simulated with parameterized, deliberately hypothetical constants.
+- The handling lane has modeled steel crash barriers and nonteleporting contact impulses; corner hits damage the airframe. Braking distance, axle weight transfer, pitch/roll under accelerations, low-grip stopping distances and an extended deterministic regression suite are tested.
+- Visual improvements include a cubic-smoothed body and canopy, refined bumper/splitter/lens details, tread and rotor geometry, stationary brake calipers, wishbone links, animated front steering and individual wheel spin driven by calculated wheel angular rates.
+- CSV black-box samples include drivetrain and tire temperatures in addition to flight state and four-corner suspension telemetry. This is an original educational concept, **not measured Roadster hardware behavior** and not engineering-grade crash/suspension/tire validation.

@@ -1,6 +1,7 @@
 // Roadster X-Flight: deterministic, physically inspired experimental-flight model.
 // An original concept simulation. Thruster performance is hypothetical, not Tesla performance data.
 import {clamp} from './physics.mjs';
+import {stepRoadVehicle} from './vehicle.mjs';
 export const RESEARCH_STAGES=[
   {name:'HOVER CAPTURE',detail:'Lift to 6–11 m. Stabilize over the launch pad for 1.8 s.',kind:'hover',x:0,y:8,z:42,radius:12},
   {name:'VECTOR TRANSFER',detail:'Navigate the low calibration torus.',kind:'gate',x:0,y:12,z:-36,radius:13},
@@ -38,6 +39,14 @@ export function stepResearch(s,input,rawDt){
   const dt=clamp(rawDt,0,.025),events=[];
   if(!dt||s.completed)return events;
   s.time+=dt;
+  // Ground test uses independent tire patches, wheel spin, regenerative braking
+  // and yaw inertia; existing R&D rocket dynamics take over on lift-off.
+  if(s.mode==='dynamics'&&s.grounded&&!input.lift&&!s.precision){
+    const wind=windAt(s.time,0);s.windX=wind.x;s.windZ=wind.z;
+    s.lifting=false;s.boosting=!!input.boost;s.thrust=0;s.thrustG=0;s.vy=0;s.y=0;
+    stepRoadVehicle(s,input,dt);s.flightDistance+=s.speed*dt;
+    return events;
+  }
   const previous={x:s.x,y:s.y,z:s.z};
   const wind=windAt(s.time,s.y);s.windX=wind.x;s.windZ=wind.z;
   const mass=DRY_MASS+s.propellant;

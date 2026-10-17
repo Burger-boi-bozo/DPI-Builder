@@ -91,8 +91,11 @@ export function suspensionStep(a,vehicle,dt, options={}){
   a.heave=clamp(a.heave+a.heaveVelocity*dt,-.22,.5);
   if(a.heave<=-.22&&a.heaveVelocity<0)a.heaveVelocity=0;
   if(a.heave>=.5&&a.heaveVelocity>0)a.heaveVelocity=0;
-  const pitchAcceleration=flight?(-a.pitch*23-a.pitchVelocity*12):(pitchTorque/SUSPENSION.pitchInertia);
-  const rollAcceleration=flight?(-a.roll*24-a.rollVelocity*12):(rollTorque/SUSPENSION.rollInertia);
+  // Under acceleration, the horizontal CG inertial force produces real
+  // pitch/roll moment rather than directly animating a decorative tilt.
+  const aLong=clamp(vehicle.drivetrain?.longitudinalAccel||0,-18,18),aLat=clamp(vehicle.drivetrain?.lateralAccel||0,-18,18);
+  const pitchAcceleration=flight?(-a.pitch*23-a.pitchVelocity*12):(pitchTorque+mass*aLong*.53)/SUSPENSION.pitchInertia;
+  const rollAcceleration=flight?(-a.roll*24-a.rollVelocity*12):(rollTorque+mass*aLat*.53)/SUSPENSION.rollInertia;
   a.pitchVelocity=clamp(a.pitchVelocity+pitchAcceleration*dt,-2.5,2.5);
   a.rollVelocity=clamp(a.rollVelocity+rollAcceleration*dt,-3,3);
   a.pitch=clamp(a.pitch+a.pitchVelocity*dt,-.23,.23);
@@ -106,6 +109,6 @@ export function suspensionStep(a,vehicle,dt, options={}){
   a.maxCompression=Math.max(...a.compression);
   a.grip=clamp(sum/(mass*G),0,1.35)*(contactCount/4);
   const speed=vehicle.speed||Math.hypot(vehicle.vx||0,vehicle.vz||0);
-  for(let i=0;i<4;i++)a.wheelSpin[i]+=(speed/SUSPENSION.wheelRadius)*dt*(vehicle.braking?-.35:1);
+  for(let i=0;i<4;i++)a.wheelSpin[i]+=(vehicle.drivetrain?vehicle.drivetrain.wheelOmega[i]:speed/SUSPENSION.wheelRadius)*dt;
   return a;
 }
