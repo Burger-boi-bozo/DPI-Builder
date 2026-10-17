@@ -47,3 +47,14 @@ Production: Proxmox `pve` at `/opt/roadster-flight`, service `roadster-flight.se
 ## License and attribution
 
 Three.js notice: `game/THREE-LICENSE.txt`; font licenses: `game/FONTS-OFL-1.1.txt`. Fan concept; not official Tesla/SpaceX product, not a statement of actual vehicle capabilities. V1 attribution remains in the recovered original export.
+
+
+## V2.6 — Real suspension and interface overhaul
+
+- Entirely reworked flight UI: the main scene is unobstructed and the engineering instrument panel is explicitly toggled via **SHOW SYSTEMS**. Larger readable typography, mobile responsive, simpler controls and discrete mode selection.
+- Four **independent spring/damper assemblies** modeled at 120 Hz, each sampling contact elevation per wheel. Includes wheel-normal forces, compression/droop travel, pitch/roll and sprung-mass heave, nonlinear bump stops, damping asymmetry and axle anti-roll bars. Tire grip responds to load and lost contact.
+- **Suspension Lab** mode spawns directly at the 200-meter handling course. Hold **W** to roll through speed humps, a washboard, and an offset rut. Click **SHOW SYSTEMS** to read the four individual normal forces and travel indicators.
+- The visual wheel carriers move with the computed travel rather than sharing body motion, and the exposed dampers and springs follow the animated wheels. The physical test strip is rendered with precisely the same height profile used by the physics solver.
+- X-Flight telemetry CSV now includes four wheel strokes, four normal forces, chassis heave, pitch and roll.
+
+The physics is a high-fidelity *concept-level* sprung-body simulation, not an OEM engineering model or a validated multibody tire simulation. Real Roadster suspension specifications, geometry, and empirical tire coefficients are not available. No claim of photorealism or experimentally validated Tesla performance is made.

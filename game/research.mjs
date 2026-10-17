@@ -24,6 +24,9 @@ export function makeResearchState(){return {
   verticalSpeed:0,peakAltitude:0,highestGs:0,landingGs:0,flightDistance:0,energy:100,
   events:0, hardLandings:0, cda:.85
 };}
+export function makeDynamicsState(){
+ const s=makeResearchState();s.mode='dynamics';s.x=64;s.z=78;s.yaw=0;s.time=0;return s;
+}
 export function setPrecision(state,on){state.precision=!!on;state.hoverAltitude=Math.max(0,state.y);}
 function sweptGate(a,b,target){
   const dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z,dist2=dx*dx+dy*dy+dz*dz;
@@ -65,15 +68,16 @@ export function stepResearch(s,input,rawDt){
   s.propellant=Math.max(0,s.propellant-thrustN/exhaustVelocity*dt-(boost?3.7*dt:0));
   s.air=100*s.propellant/PROP_CAPACITY;
   const yawSin=Math.sin(s.yaw),yawCos=Math.cos(s.yaw);
-  const driveForce=(s.grounded?9.5:3.4)*forward+(boost?11.6:0);
-  const sideForce=(s.grounded?3.2:5.5)*lateral;
+  const contactGrip=s.grounded?clamp(s.suspension?.grip??1,.12,1.06):1;
+  const driveForce=(s.grounded?9.5*contactGrip:3.4)*forward+(boost?11.6*contactGrip:0);
+  const sideForce=(s.grounded?3.2*contactGrip:5.5)*lateral;
   const ax= -yawSin*driveForce + yawCos*sideForce;
   const az= -yawCos*driveForce - yawSin*sideForce;
   const rvx=s.vx-wind.x,rvz=s.vz-wind.z;
   const relativeSpeed=Math.hypot(rvx,rvz,s.vy);
   const density=1.225*Math.exp(-Math.max(0,s.y)/8500);
   const drag=.5*density*s.cda*relativeSpeed/mass;
-  const damp=s.grounded?2.5:(s.assist?.11:.015);
+  const damp=s.grounded?2.5*contactGrip:(s.assist?.11:.015);
   const sideDamp=s.precision&&!forward&&!lateral&&!s.grounded?.8:damp;
   s.vx+=(ax-drag*rvx-sideDamp*s.vx)*dt;
   s.vz+=(az-drag*rvz-sideDamp*s.vz)*dt;
@@ -121,7 +125,7 @@ export function stepResearch(s,input,rawDt){
     s.completed=true;s.failed=true;events.push({type:'researchAbort',reason:s.structural<=0?'STRUCTURAL LIMIT':'TEST-RANGE LIMIT'});
     return events;
   }
-  const target=RESEARCH_STAGES[s.stage];
+  const target=s.mode==='dynamics'?null:RESEARCH_STAGES[s.stage];
   if(target){
     if(target.kind==='hover'){
       const stable=s.y>=6&&s.y<=11&&Math.hypot(s.x,s.z-42)<11&&Math.abs(s.vy)<3.2&&horizontalSpeed<6;

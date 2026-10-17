@@ -35,3 +35,91 @@
 @media(max-width:760px){.mode-picker{max-width:none}.mode-picker .modes{grid-template-columns:repeat(2,minmax(0,1fr))}.research-panel{top:140px;right:4%;left:auto;width:200px;padding:9px}.research-header,.research-trace-head{font-size:6px}.research-panel h3{font-size:12px;margin:5px 0 1px}.research-panel>p{display:none}.flight-horizon{height:53px;margin:5px 0}.horizon-tag{display:none}.horizon-reference{font-size:12px}.research-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.research-stats>div{padding:4px}.research-stats b{font-size:12px}.research-stats span{font-size:6px}.research-stats small{font-size:6px}#researchTrace{height:43px}.research-trace-head{margin:6px 0 3px}.research-actions{margin:5px 0;gap:3px}.research-switch{min-height:26px;padding:5px 2px;font-size:7px}.research-panel .research-hint{display:none}.research-panel .research-header strong{font-size:7px}.top-scores{display:none}#app[data-mode="research"] .telemetry{left:4%;bottom:195px}#app[data-mode="research"] .mission-block{max-width:39%;font-size:10px}#app[data-mode="research"] .mission-block h2{font-size:18px}#app[data-mode="research"] .mission-block p{display:none} .touch-actions{grid-template-columns:repeat(3,minmax(0,1fr))}.touch-actions button{width:48px;font-size:7px}#app[data-state="replay"] .research-panel{display:none}}
 @media(max-height:670px) and (min-width:760px){.research-panel{top:94px;transform:scale(.86);transform-origin:top right}.research-panel .flight-horizon{height:64px}.research-panel h3{font-size:15px}.research-panel .research-stats>div{padding:4px}}
 @media(min-width:761px){.mode-picker .mode{padding:12px 15px;min-height:60px}.mode-picker .mode-copy strong{font-size:13px}.mode-picker .mode-copy small{font-size:9px}.mode-picker{bottom:60px}.mode-picker .picker-label{margin-bottom:8px}}
+/* V2.6 — legible, deliberately quiet, in-vehicle flight test interface */
+:root{--paper:#f4f8fc;--muted:#a9b7c6;--accent:#b1edf1;--hot:#c1e7b0;--line:#d3eaf22e}
+.vignette{background:linear-gradient(90deg,#020910cb 0%,#06102070 36%,transparent 76%),linear-gradient(0deg,#01060b90 0%,transparent 27%,transparent 79%,#06101b90 100%)}
+.playing .vignette{opacity:.62;background:linear-gradient(0deg,#041019a1,transparent 28%,transparent 77%,#07111d9c)}
+.topbar{height:82px;padding:18px clamp(22px,3.4vw,68px);background:linear-gradient(180deg,#060d16c7 0%,transparent 100%);gap:28px}
+.brand{font-size:15px;letter-spacing:2.1px;font-weight:650;gap:12px;white-space:nowrap}
+.brand svg{width:28px;height:28px;fill:#e9f1f5}.brand small{font-size:8px;letter-spacing:3.2px;margin-top:3px;color:#9aaebd}
+.top-meta{font-size:10px;gap:8px;letter-spacing:1.2px;margin:auto}.top-meta .dim{color:#97a9b8}
+.toolbar{gap:7px}.tool{height:36px;border-color:#a9c5d438;border-radius:8px;background:#14213086;backdrop-filter:blur(16px)}
+.tool:hover{background:#2c3d4ab8;filter:none}.tool:focus-visible,.mode:focus-visible,.research-switch:focus-visible{outline:2px solid #c4f8ff;outline-offset:2px}
+.text-tool,.small-tool{font-size:10px!important;font-weight:600;letter-spacing:.085em;padding:0 13px!important}
+.icon-tool{width:36px;color:#dceaf4}.tool#referencesButton{display:none}
+.systems-toggle{display:none}.playing .systems-toggle{display:inline-flex;align-items:center;color:#ceeff4;background:#1d3540bd;border-color:#6e9daa7a}
+.intro{left:6%;top:24%;width:min(47%,670px);max-width:630px}
+.intro .eyebrow{font-size:10px;font-weight:650;letter-spacing:.22em;color:#9ed2d5}
+.intro h1{font-size:clamp(62px,7vw,112px);line-height:.97;margin:22px 0 26px;letter-spacing:-.077em;font-weight:700}
+.intro h1 em,.intro h1 em{font-style:normal;color:#e8f6f7;letter-spacing:-.077em}
+.intro p{font-size:15px;line-height:1.65;max-width:440px;color:#bdcbd5;font-weight:400}
+.launch-row{gap:12px;margin-top:27px}.primary{background:#e5eff4;color:#0c1a25;box-shadow:0 10px 50px #0005;border-radius:10px;font-size:11px;min-height:52px;letter-spacing:.095em}
+.primary:hover{background:#fff;filter:none}.secondary{background:#1124358c;border:1px solid #b3d5e25a;border-radius:10px;min-height:52px;font-size:11px}
+.input-note{margin-top:18px;font-size:10px;color:#9eaab7}.key{border:1px solid #8daeb742;color:#d7e8f2;border-radius:5px;font-size:10px}
+.car-label{top:16%;right:5%;font-size:10px;letter-spacing:.18em;color:#dcebf4}.car-label small{color:#8fb9c1}
+.mode-picker{right:4.5%;left:auto;bottom:10%;width:min(420px,33vw);max-width:420px;border:1px solid #a3d2dd3c;background:linear-gradient(145deg,#101f2bc9,#08121ec9);border-radius:18px;backdrop-filter:blur(18px);padding:18px;box-shadow:0 22px 65px #01070a77}
+.picker-label{font-size:10px;color:#b9cad5;letter-spacing:.12em;margin-bottom:11px}
+.mode-picker .modes{grid-template-columns:1fr;gap:6px}.mode-picker .mode{background:#0f1f2a71;border:1px solid #a5bbcd22;border-radius:10px;padding:10px 13px;min-height:55px;display:flex;align-items:center;gap:13px;text-align:left}
+.mode-picker .mode.active{background:#b5eef31a;border-color:#9bf0ff8c;box-shadow:inset 3px 0 0 #97e9ee}
+.mode-picker .mode:hover{background:#d6e9f51d;border-color:#89c7d988;filter:none}
+.mode-picker .mode-num{font-size:13px;color:#9acbd2;min-width:24px;letter-spacing:0}
+.mode-picker .mode-copy{display:block;flex:1}.mode-picker .mode-copy strong{font-size:13px;letter-spacing:.01em;color:#f1f6fa;text-transform:none}.mode-picker .mode-copy small{font-size:10px;line-height:1.35;color:#a5b6c5;margin-top:3px;min-height:0}
+.mode-picker .mode-icon{display:block;font-size:16px;color:#c1dbe3}
+.mode[data-mode="research"],.mode[data-mode="research"].active{background:unset;box-shadow:unset;border-color:#a5bbcd22}.mode-picker .mode[data-mode="research"].active{background:#a3deec20;box-shadow:inset 3px 0 0 #97e9ee;border-color:#9bf0ff8c}
+.menu footer{left:6%;right:5%;bottom:24px;font-size:9px;letter-spacing:.075em;color:#aebac5}
+.hud{pointer-events:none}.hud button{pointer-events:auto}
+.mission-block{left:3.5%;top:116px;width:min(420px,38vw);background:#07121c99;padding:16px 20px 18px;border:1px solid #e0f7ff1f;border-radius:12px;backdrop-filter:blur(10px)}
+.mission-block .eyebrow{font-size:10px;letter-spacing:.17em;font-weight:650;color:#a3ecf5}
+.mission-block h2{font-size:25px;line-height:1.22;margin:8px 0 7px;letter-spacing:-.026em;font-weight:600}
+.mission-block h2 span{font-size:12px;color:#9dafbb}
+.mission-block p{font-size:12px;line-height:1.45;color:#c4d5de;margin:0}
+.top-scores{right:3.6%;top:116px;background:#07121c98;padding:13px 16px;border:1px solid #e0f7ff20;border-radius:10px;gap:24px;backdrop-filter:blur(12px)}
+.top-scores span{font-size:9px;color:#a5c6d2}.top-scores strong{font-size:16px;font-variant-numeric:tabular-nums}
+.telemetry{left:3.5%;bottom:78px;gap:20px;background:#06121ee4;padding:16px 22px;min-width:330px;border:1px solid #cae4ed42;border-radius:16px;backdrop-filter:blur(20px);box-shadow:0 10px 40px #0007}
+.telemetry .speed-block strong{font-size:61px;letter-spacing:-.085em;line-height:1}
+.telemetry .speed-block span{font-size:11px;color:#b4d2dc}.telemetry .vehicle-state{font-size:9px;color:#a6ebdd;letter-spacing:.1em}
+.telemetry .divider{height:68px;background:#e9fbff30}
+.flight-data{width:145px}.flight-data>div:first-child span,.flight-data>div:nth-child(2) span{font-size:9px;color:#9db4c2}
+.flight-data strong{font-size:17px;letter-spacing:-.02em}.flight-data #fuelHint{font-size:9px;color:#8db3bc}.flight-data #ghostStatus{font-size:9px!important;color:#c7dded!important;text-shadow:none;font-weight:400}
+.speed-ticks{display:none}.fuel-bar{border-radius:30px;height:5px;background:#fff2}.fuel-bar i{background:#9be7ec!important;border-radius:30px}
+.map-wrap{right:3.5%;bottom:78px;border-radius:12px;background:#07131fd8;border-color:#c9e4e938}
+.game-keybar{bottom:18px;background:#06111ab0;padding:8px 13px;border:1px solid #deeefa24;border-radius:8px;max-width:min(820px,89vw);left:50%;transform:translateX(-50%);gap:15px;justify-content:center;backdrop-filter:blur(10px)}
+.game-keybar span{font-size:9px;color:#b5c9d4;letter-spacing:.04em}.game-keybar kbd{font-size:9px;color:#e9f4f7}
+.game-keybar span:nth-child(5),.game-keybar span:nth-child(6),.game-keybar span:nth-child(7){display:none}
+.research-panel{top:91px;right:3.4%;width:min(355px,34vw);padding:17px 17px 15px;border-radius:14px;max-height:calc(100vh - 165px);overflow-y:auto;overflow-x:hidden;background:#0c1c28f5;border-color:#a2cdd85f;box-shadow:0 20px 70px #000a;scrollbar-width:thin}
+#app[data-telemetry="closed"] #researchPanel{display:none!important}
+#app[data-telemetry="open"] .top-scores{display:none!important}
+.research-panel h3{font-family:'DM Sans',Arial,sans-serif;font-size:19px;letter-spacing:-.015em;margin-top:10px}
+.research-panel>p{font-size:11px;line-height:1.45}
+.research-header,.research-trace-head{font-size:9px;letter-spacing:.09em}
+.flight-horizon{height:80px}
+.research-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.research-stats>div{min-width:0}
+.research-stats span{font-size:8px}.research-stats b{font-size:18px}.research-stats small{font-size:8px}
+#researchTrace{height:63px}
+.research-panel .research-hint{font-size:10px}
+.suspension-module{padding:12px;border:1px solid #a6d2de4f;border-radius:10px;background:#0f2631;margin-bottom:16px}
+.suspension-head{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px;letter-spacing:.12em;font-weight:650;color:#e9fbff}
+.suspension-head small{font-size:8px;letter-spacing:.06em;color:#9ab4c2;font-weight:400}
+.suspension-mini{margin:14px auto 10px;display:grid;grid-template-columns:1fr .7fr 1fr;gap:8px;align-items:center;max-width:260px}
+.suspension-axle{display:flex;flex-direction:column;gap:13px}.suspension-frame{height:110px;border:1px dashed #b7d5e26b;border-radius:10px;display:flex;justify-content:center;align-items:center;flex-direction:column;gap:7px;color:#a5c4cd;font-size:9px;text-align:center;line-height:1.4}.suspension-frame strong{font-size:18px;color:#d9edf2}
+.corner{position:relative;display:flex;flex-direction:column;justify-content:center;gap:2px;height:48px;padding:5px 8px 5px 12px;border-radius:7px;background:#172c3a;border:1px solid #a1d2e230;overflow:hidden}
+.corner b,.corner small{z-index:1;font-size:11px}.corner small{font-size:9px;color:#bcd2db}.suspension-bar{position:absolute;bottom:0;left:0;width:4px;background:linear-gradient(#d7ffae,#7fd7ef);height:40%;border-radius:4px;transition:height .1s}
+.corner.no-contact .suspension-bar{background:#e0a59c}.corner.no-contact{opacity:.65}
+.suspension-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding-top:11px;border-top:1px solid #a7d2e838}
+.suspension-metrics>div{display:flex;flex-direction:column;gap:5px}.suspension-metrics span{font-size:8px;color:#9db9c7;letter-spacing:.06em}.suspension-metrics strong{font-size:13px;font-variant-numeric:tabular-nums;color:#e9f7fa}
+@media(max-width:1160px){.top-meta{display:none}.mode-picker{width:min(410px,40vw)}.intro{width:51%}}
+@media(max-width:760px){.topbar{height:66px;padding:13px 5%}.brand{font-size:13px;letter-spacing:1.5px}.brand small{font-size:7px}.tool{height:32px}.toolbar{gap:5px}.text-tool,.small-tool{font-size:0!important;width:34px!important;padding:0 4px!important}.systems-toggle{font-size:9px!important;width:auto!important;padding:0 10px!important}.toolbar #photoButton{display:none}
+ .intro{top:12%;left:6%;width:88%;max-width:460px}.intro h1{font-size:clamp(48px,12vw,78px);margin:14px 0}.intro p{font-size:12px;max-width:290px;line-height:1.5}.launch-row{margin-top:17px}.primary,.secondary{min-height:42px;font-size:9px}.input-note{display:none}
+ .mode-picker{left:5%;right:5%;width:auto;max-width:none;bottom:33px;padding:12px 13px;border-radius:14px}.mode-picker .modes{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.mode-picker .mode{min-height:51px;padding:6px 8px!important;gap:8px}.mode-picker .mode-copy strong{font-size:11px}.mode-picker .mode-copy small{font-size:8px}.mode-picker .mode-icon{display:none}.mode-picker .mode-num{font-size:9px;min-width:13px}.picker-label{font-size:8px;margin-bottom:9px}.menu footer{display:none}
+ .mission-block{top:80px;left:5%;width:51%;max-width:none;padding:10px 12px}.mission-block h2{font-size:17px!important}.mission-block .eyebrow{font-size:8px}.mission-block p{display:block!important;font-size:9px;line-height:1.35;max-width:none}
+ .telemetry{bottom:175px!important;left:5%!important;min-width:0;padding:9px 12px;gap:12px;border-radius:11px}.telemetry .speed-block strong{font-size:41px}.telemetry .speed-block span{font-size:8px}.telemetry .divider{height:47px}.flight-data{width:99px}.flight-data strong{font-size:12px}.flight-data #fuelHint,.flight-data #ghostStatus{display:none}
+ .research-panel{top:125px!important;left:auto!important;right:3%!important;width:min(88vw,340px)!important;max-height:calc(100vh - 325px);padding:12px!important;transform:none!important}
+ .research-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.research-stats>div{padding:5px}.research-stats b{font-size:15px}.research-panel>p{display:block}.flight-horizon{height:66px}
+ .suspension-module{padding:9px}.suspension-axle{gap:6px}.suspension-frame{height:90px}.corner{height:40px;padding:3px 5px 3px 9px}.corner b{font-size:10px}.corner small{font-size:8px}
+ .top-scores{display:none}.map-wrap{display:none}.game-keybar{display:none}.touch-controls{z-index:14}
+}
+@media(max-height:720px) and (min-width:761px){.mode-picker{bottom:6%;width:355px;padding:11px}.mode-picker .mode{min-height:44px;padding:7px 10px}.intro h1{font-size:clamp(55px,7vw,90px)}.intro p{font-size:13px}.research-panel{max-height:calc(100vh - 130px)}.telemetry{bottom:60px}}
+@media(max-height:680px) and (max-width:760px){.intro{top:11%}.intro h1{font-size:45px}.intro p{display:none}.mode-picker{bottom:10px}.mode-picker .mode{min-height:38px}.mode-picker .mode-copy small{display:none}.picker-label{display:none}.telemetry{bottom:105px!important}.research-panel{max-height:calc(100vh - 255px)}}
+
+/* Axle schematic follows actual front and rear wheel placement. */
+.suspension-mini{grid-template-columns:1fr 1fr;max-width:245px;gap:8px}.suspension-axle{display:contents}.suspension-frame{display:none}

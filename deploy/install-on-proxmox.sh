@@ -9,7 +9,7 @@ command -v python3 >/dev/null
 command -v node >/dev/null
 cd "$ROOT"
 node --test tests/*.test.mjs
-for f in game/game.mjs game/scene.mjs game/physics.mjs game/research.mjs; do node --check "$f"; done
+for f in game/game.mjs game/scene.mjs game/physics.mjs game/research.mjs game/suspension.mjs; do node --check "$f"; done
 STAGE=$(mktemp -d "$ROOT/.v2-release-XXXXXXXX")
 BACKUP=""
 SWAPPED=0
@@ -25,8 +25,8 @@ cleanup() {
 }
 trap cleanup EXIT
 python3 -m zipfile -e "$ARCHIVE" "$STAGE"
-[ -s "$STAGE/game/index.html" ] && [ -s "$STAGE/game/research.mjs" ] && [ -s "$STAGE/game/three.module.min.js" ]
-grep -q 'Roadster X-Flight V2' "$STAGE/game/index.html"
+[ -s "$STAGE/game/index.html" ] && [ -s "$STAGE/game/research.mjs" ] && [ -s "$STAGE/game/suspension.mjs" ] && [ -s "$STAGE/game/three.module.min.js" ]
+grep -q 'Roadster / Experimental Flight V2.6' "$STAGE/game/index.html"
 mkdir -p "$ROOT/releases"
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 if [ -d "$ROOT/dist" ]; then BACKUP="$ROOT/releases/previous-$STAMP";mv "$ROOT/dist" "$BACKUP";fi
@@ -37,7 +37,8 @@ chown -R root:root "$ROOT/dist"
 if ! systemctl is-active --quiet roadster-flight.service; then systemctl restart roadster-flight.service;fi
 sleep 1
 curl -fsSI --max-time 8 http://127.0.0.1:18767/ >/dev/null
-curl -fsS --max-time 8 http://127.0.0.1:18767/ | grep -q 'Roadster X-Flight V2'
+curl -fsS --max-time 8 http://127.0.0.1:18767/ | grep -q 'Roadster / Experimental Flight V2.6'
 curl -fsSI --max-time 8 http://127.0.0.1:18767/research.mjs >/dev/null
+curl -fsSI --max-time 8 http://127.0.0.1:18767/suspension.mjs >/dev/null
 SWAPPED=0
-printf 'V2.5 deployed to %s/dist; previous release %s\n' "$ROOT" "$BACKUP"
+printf 'V2.6 deployed to %s/dist; previous release %s\n' "$ROOT" "$BACKUP"

@@ -14,17 +14,19 @@ jobs:
           node-version: '22'
       - name: Restore bundled offline assets
         run: python3 -m zipfile -e artifacts/roadster-v2-deploy.zip .
-      - name: Syntax validation and 27 physics regressions
+      - name: Syntax validation and suspension and flight physics regressions
         run: |
           node --check game/game.mjs
           node --check game/scene.mjs
           node --check game/physics.mjs
           node --check game/research.mjs
+          node --check game/suspension.mjs
           node --test tests/*.test.mjs
       - name: Verify self-contained release assets
         run: |
           test -s game/three.module.min.js
           test -s game/FONTS-OFL-1.1.txt
           test -s game/research.mjs
+          test -s game/suspension.mjs
           test -s artifacts/roadster-v2-deploy.zip
-          grep -q 'Roadster X-Flight V2' game/index.html
+          grep -q 'Roadster / Experimental Flight V2.6' game/index.html

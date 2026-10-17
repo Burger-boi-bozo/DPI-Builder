@@ -1,3 +1,4 @@
+import {surfaceAt} from './suspension.mjs';
 import * as T from './three.module.min.js';
 import {GATES,LOOP,PARKED} from './physics.mjs';
 import {RESEARCH_STAGES} from './research.mjs';
@@ -53,7 +54,7 @@ export function makeCar(color=0xdfe6ea,simple=false){
     const rotor=box(body,.23,.07,.24,metal,x,.43,-1.94);rotor.rotation.y=x*.13;
     const wedge=box(body,.25,.09,.17,carbon,x,.25,2.1);wedge.rotation.y=x*.09;
   }
-  const wheels=[];
+  const wheels=[],springs=[];
   for(const x of [-1.08,1.08])for(const z of [-1.48,1.45]){
     const wheel=new T.Group();wheel.position.set(x,.45,z);body.add(wheel);
     const tire=mesh(new T.CylinderGeometry(.45,.45,.35,24),rubber,wheel);tire.rotation.z=Math.PI/2;
@@ -65,7 +66,14 @@ export function makeCar(color=0xdfe6ea,simple=false){
       for(let k=0;k<7;k++){const a=k/7*Math.PI*2;const spoke=box(wheel,.04,.48,.043,metal,outer,0,0);spoke.rotation.x=a;}
     }
     const cap=mesh(new T.CylinderGeometry(.08,.08,.39,12),metal,wheel);cap.rotation.z=Math.PI/2;
-    wheels.push(wheel);
+    // Exposed telescopic damper and coil: wheel travel drives this assembly.
+    const strut=new T.Group();strut.position.set(x*.82,.88,z);body.add(strut);
+    const guide=mesh(new T.CylinderGeometry(.052,.052,.37,10),metal,strut);guide.position.y=-.13;
+    const piston=mesh(new T.CylinderGeometry(.033,.033,.32,10),dark,strut);piston.position.y=-.35;
+    const spring=mesh(new T.TorusGeometry(.073,.017,5,10),glow(0xe5b7ff),strut);spring.rotation.x=Math.PI/2;spring.position.y=-.16;
+    const carrier=new T.Group();carrier.add(wheel);body.add(carrier);carrier.position.set(x,0,z);wheel.position.set(0,.45,0);
+    // remove first parent so the carrier owns the wheel / steering pivot.
+    springs.push({strut,guide,piston,spring,carrier});wheels.push(wheel);
   }
   for(const x of [-.78,-.26,.26,.78]){
     const nozzle=mesh(new T.CylinderGeometry(.145,.18,.28,16,1,true),metal,body,x,.48,2.30);nozzle.rotation.x=Math.PI/2;
@@ -79,7 +87,7 @@ export function makeCar(color=0xdfe6ea,simple=false){
   for(const x of [-.65,.65])box(body,.065,.23,.16,dark,x,1.02,1.93);
   box(body,2.35,.065,.37,shell,0,1.15,1.96);
   for(const x of [-1.14,1.14])box(body,.035,.16,.4,dark,x,1.18,1.96);
-  group.userData={body,wheels};return group;
+  group.userData={body,wheels,springs};return group;
 }
 export function makeLabel(text,color='#dce8ff',w=512,h=96){
   const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d');
@@ -173,6 +181,21 @@ export function createScene(container){
   for(const x of [-.83,.83])for(const z of [-1.42,1.48]){
     const core=mesh(new T.ConeGeometry(.22,1.35,16),jetMaterial.clone(),car.userData.body,x,-.21,z);
     core.rotation.z=Math.PI;core.castShadow=false;core.receiveShadow=false;vehicleJets.push(core);
+  }
+  // Suspension dynamics track: raised concrete, washboard and asymmetric wheel rut.
+  // Geometry samples exactly the same physical height function as the four tire contacts.
+  const stripGeometry=new T.PlaneGeometry(18,213,36,852);stripGeometry.rotateX(-Math.PI/2);
+  const stripPositions=stripGeometry.getAttribute('position');
+  for(let i=0;i<stripPositions.count;i++){
+    const x=64+stripPositions.getX(i),z=-18.5+stripPositions.getZ(i);
+    stripPositions.setY(i,.025+surfaceAt(x,z));
+  }
+  stripGeometry.computeVertexNormals();
+  const proving=new T.Mesh(stripGeometry,mat(0x2b323f,.8,.08));proving.position.set(64,0,-18.5);proving.receiveShadow=true;scene.add(proving);
+  for(const side of [-8.5,8.5])line(scene,[[64+side,.055,86],[64+side,.055,-123]],0xffba8f);
+  for(const z of [56,38,20,-3,-67,-76,-115]){
+    const sign=makeLabel(z>0?'DAMPER / IMPULSE':z>-67?'WASHBOARD / COMPLIANCE':'CROSS-AXLE / RUT','#ffedcf');
+    sign.position.set(78,2,z);sign.scale.set(16,3.2,1);scene.add(sign);
   }
   // Research campus: an illuminated lift platform, sensor gantries, a
   // crosswind calibration corridor and a precision touchdown pad.

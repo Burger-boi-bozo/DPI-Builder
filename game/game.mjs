@@ -1,6 +1,7 @@
 import {createScene} from './scene.mjs';
 import {createState,step,resetPosition,GATES,LOOP,clamp,heightAt,missionGateCount} from './physics.mjs';
-import {makeResearchState,stepResearch,RESEARCH_STAGES,setPrecision} from './research.mjs';
+import {makeResearchState,stepResearch,RESEARCH_STAGES,setPrecision,makeDynamicsState} from './research.mjs';
+import {createSuspension,suspensionStep,SUSPENSION} from './suspension.mjs';
 
 const $=id=>document.getElementById(id);
 let world;
@@ -11,9 +12,10 @@ function initialize(w){
  const {T,renderer,scene,camera,car,gates,gateGroup,shadow,sun}=w;
  let state=makeResearchState(),selectedMode='research',phase='menu',cameraMode=0,rollInput=0,countdown=3,calloutTime=0,elapsed=0,last=performance.now(),accumulator=0,previousModalPhase='menu';
  const keys=new Set(),camTarget=new T.Vector3(),camDesired=new T.Vector3(),lookDesired=new T.Vector3(),temp=new T.Vector3(),velocity=new T.Vector3();
- const modeTitles={research:'X-FLIGHT CERTIFICATION',trial:'FLIGHT TRIAL',stunt:'STUNT RUN',launch:'LAUNCH SPRINT',free:'FREE ROAM'};
+ const modeTitles={dynamics:'CHASSIS DYNAMICS / DAMPER LAB',research:'X-FLIGHT CERTIFICATION',trial:'FLIGHT TRIAL',stunt:'STUNT RUN',launch:'LAUNCH SPRINT',free:'FREE ROAM'};
  const ghostKey=m=>'roadster-flight-ghost-v2-'+m;
- let recording=[],recordTimer=0,ghostTrack=[],ghostEnabled=true,environmentIndex=0;
+ const isResearchMode=m=>m==='research'||m==='dynamics';
+ let suspension=createSuspension(),recording=[],recordTimer=0,ghostTrack=[],ghostEnabled=true,environmentIndex=0;
  let flightLog=[],trace=[],logTimer=0,lastFlightLog=[],replayElapsed=0,replayPlaying=false,replayIndex=0;
  let records={};try{records=JSON.parse(localStorage.getItem('roadster-flight-records-v1')||'{}');}catch{}
  const speedTicks=Array.from({length:22},()=>{const i=document.createElement('i');$('speedTicks').appendChild(i);return i;});
@@ -31,16 +33,16 @@ function initialize(w){
  function closeDialogs(){document.querySelectorAll('dialog[open]').forEach(d=>d.close());}
  function clearKeys(){keys.clear();rollInput=0;document.querySelectorAll('.pressed').forEach(b=>b.classList.remove('pressed'));}
  function displayCallout(title,sub='',duration=2){$('callout').querySelector('strong').textContent=title;$('callout').querySelector('span').textContent=sub;calloutTime=duration;$('callout').classList.add('show');}
- function updateGateStyle(){const racing=state.mode==='trial'||state.mode==='launch';gates.forEach((g,i)=>{g.group.visible=racing?i<missionGateCount(state.mode)&&i>=state.gate&&i<=state.gate+2:state.mode==='free';g.ring.material.color.set(i===state.gate&&racing?0xe4ff95:0xab97db);g.number.visible=racing&&i<missionGateCount(state.mode);});gateGroup.visible=phase==='menu'||(state.mode!=='stunt'&&state.mode!=='research');}
+ function updateGateStyle(){const racing=state.mode==='trial'||state.mode==='launch';gates.forEach((g,i)=>{g.group.visible=racing?i<missionGateCount(state.mode)&&i>=state.gate&&i<=state.gate+2:state.mode==='free';g.ring.material.color.set(i===state.gate&&racing?0xe4ff95:0xab97db);g.number.visible=racing&&i<missionGateCount(state.mode);});gateGroup.visible=phase==='menu'||(state.mode!=='stunt'&&!isResearchMode(state.mode));}
  function start(){
-   closeDialogs();clearKeys();state=selectedMode==='research'?makeResearchState():createState(selectedMode);recording=[];recordTimer=0;ghostTrack=[];flightLog=[];trace=[];logTimer=0;replayElapsed=0;replayPlaying=false;
-   $('replayPanel').classList.add('hidden');$('researchPanel').classList.toggle('hidden',state.mode!=='research');$('app').dataset.mode=state.mode;w.setResearchPhase(state.mode==='research',state.stage||0);
+   closeDialogs();clearKeys();state=selectedMode==='research'?makeResearchState():selectedMode==='dynamics'?makeDynamicsState():createState(selectedMode);suspension=createSuspension();recording=[];recordTimer=0;ghostTrack=[];flightLog=[];trace=[];logTimer=0;replayElapsed=0;replayPlaying=false;
+   $('replayPanel').classList.add('hidden');$('researchPanel').classList.toggle('hidden',!isResearchMode(state.mode));$('app').dataset.mode=state.mode;w.setResearchPhase(isResearchMode(state.mode),state.stage||0);
    try{ghostTrack=JSON.parse(localStorage.getItem(ghostKey(state.mode))||'[]');if(!Array.isArray(ghostTrack))ghostTrack=[];}catch{ghostTrack=[];}
    w.setGhostPose(null);setPhase('countdown');countdown=3;accumulator=0;cameraMode=0;
    $('menu').classList.add('hidden');$('hud').classList.remove('hidden');$('pauseButton').classList.remove('hidden');$('app').classList.add('playing');$('countdown').classList.remove('hidden');$('countdown').textContent='3';$('callout').classList.remove('show');calloutTime=0;
    $('modeName').textContent=modeTitles[state.mode];$('stuntObjectives').classList.toggle('hidden',state.mode!=='stunt');$('missionProgress').classList.toggle('hidden',!['trial','launch'].includes(state.mode));$('targetCompass').classList.toggle('hidden',!['trial','launch'].includes(state.mode));
-   $('bestLabel').textContent=['trial','launch'].includes(state.mode)?'BEST TIME':'BEST SCORE';$('best').textContent=['trial','launch'].includes(state.mode)?(records[state.mode]?formatTime(records[state.mode]):'—'):(records[state.mode]||'—');
-   $('ghostStatus').textContent=ghostTrack.length?'BEST-RUN GHOST: ACTIVE':'BEST-RUN GHOST: SET A RECORD';
+   $('bestLabel').textContent=state.mode==='dynamics'?'CHASSIS / LIVE':['trial','launch'].includes(state.mode)?'BEST TIME':'BEST SCORE';$('best').textContent=['trial','launch'].includes(state.mode)?(records[state.mode]?formatTime(records[state.mode]):'—'):(records[state.mode]||'—');
+   $('ghostStatus').textContent=state.mode==='dynamics'?'SUSPENSION TEST STRIP: 200 METERS':ghostTrack.length?'BEST-RUN GHOST: ACTIVE':'BEST-RUN GHOST: SET A RECORD';
    $('pauseButton').setAttribute('aria-label','Pause game');updateGateStyle();car.scale.setScalar(1);camera.fov=55;camera.updateProjectionMatrix();positionCamera(1,true);updateHud();
    document.activeElement?.blur();if(soundEnabled){initAudio();audioContext?.resume();}tone(350);
  }
@@ -54,9 +56,9 @@ function initialize(w){
    if(state.mode==='stunt'&&(!records.stunt||state.score>records.stunt)){records.stunt=state.score;record=true;}
    if(state.mode==='research'&&!state.failed&&(!records.research||state.score>records.research)){records.research=state.score;record=true;}
    try{localStorage.setItem('roadster-flight-records-v1',JSON.stringify(records));}catch{}
-   $('resultEyebrow').textContent=state.mode==='research'?(state.failed?'EXPERIMENT TERMINATED':'FLIGHT CERTIFICATION COMPLETE'):state.mode==='trial'?'ALL 12 GATES CLEARED':state.mode==='launch'?'LAUNCH SPRINT CLEARED':'STUNT RUN COMPLETE';$('resultTitle').textContent=state.mode==='research'?(state.failed?'Telemetry preserved.':'Test pilot certified.'):['trial','launch'].includes(state.mode)?'Gravity, defeated.':'That’s one way to park.';
-   $('resultDescription').textContent=state.mode==='research'?`${state.failed?'Test terminated after exceeding safety limits.':'Five flight-certification protocols complete.'} Peak altitude ${state.peakAltitude.toFixed(1)} m. Remaining propellant ${state.propellant.toFixed(1)} kg. Peak nozzle temperature ${state.temperature.toFixed(0)}°C. Structural integrity ${state.structural.toFixed(0)}%.`:['trial','launch'].includes(state.mode)?`You flew the full course. ${state.resets?`${state.resets} reset${state.resets===1?'':'s'} included a 3-second penalty each.`:'A clean run with no resets.'}`:`${Object.values(state.objectives).filter(Boolean).length} of 3 signature stunts completed. Try linking launches, rolls, and smooth landings.`;
-   $('resultTime').textContent=formatTime(time);$('resultScore').textContent=state.score.toLocaleString();$('recordMessage').textContent=record?'✦ NEW PERSONAL BEST':'Saved on this device. Ready for another flight?';$('dataButton').classList.toggle('hidden',state.mode!=='research');$('replayButton').classList.toggle('hidden',state.mode!=='research');if(state.mode==='research'){lastFlightLog=[...flightLog];try{localStorage.setItem('roadster-research-last-flight',JSON.stringify(lastFlightLog.slice(-4000)));}catch{}}$('resultsDialog').showModal();tone(850,.35);
+   $('resultEyebrow').textContent=isResearchMode(state.mode)?(state.failed?'EXPERIMENT TERMINATED':state.mode==='dynamics'?'CHASSIS TEST COMPLETED':'FLIGHT CERTIFICATION COMPLETE'):state.mode==='trial'?'ALL 12 GATES CLEARED':state.mode==='launch'?'LAUNCH SPRINT CLEARED':'STUNT RUN COMPLETE';$('resultTitle').textContent=isResearchMode(state.mode)?(state.failed?'Telemetry preserved.':state.mode==='dynamics'?'Suspension test completed.':'Test pilot certified.'):['trial','launch'].includes(state.mode)?'Gravity, defeated.':'That’s one way to park.';
+   $('resultDescription').textContent=isResearchMode(state.mode)?`${state.failed?'Test terminated after exceeding safety limits.':'Five flight-certification protocols complete.'} Peak altitude ${state.peakAltitude.toFixed(1)} m. Remaining propellant ${state.propellant.toFixed(1)} kg. Peak nozzle temperature ${state.temperature.toFixed(0)}°C. Structural integrity ${state.structural.toFixed(0)}%.`:['trial','launch'].includes(state.mode)?`You flew the full course. ${state.resets?`${state.resets} reset${state.resets===1?'':'s'} included a 3-second penalty each.`:'A clean run with no resets.'}`:`${Object.values(state.objectives).filter(Boolean).length} of 3 signature stunts completed. Try linking launches, rolls, and smooth landings.`;
+   $('resultTime').textContent=formatTime(time);$('resultScore').textContent=state.score.toLocaleString();$('recordMessage').textContent=record?'✦ NEW PERSONAL BEST':'Saved on this device. Ready for another flight?';$('dataButton').classList.toggle('hidden',!isResearchMode(state.mode));$('replayButton').classList.toggle('hidden',!isResearchMode(state.mode));if(isResearchMode(state.mode)){lastFlightLog=[...flightLog];try{localStorage.setItem('roadster-research-last-flight',JSON.stringify(lastFlightLog.slice(-4000)));}catch{}}$('resultsDialog').showModal();tone(850,.35);
  }
  function handleEvents(events){for(const e of events){
    if(e.type==='gate'){displayCallout('GATE CLEARED',`+${e.points}  /  AIR TANK RECHARGED`);tone(700+state.gate*40,.16);updateGateStyle();for(let i=0;i<30;i++){temp.set(state.x+(Math.random()-.5)*8,state.y+Math.random()*5,state.z);velocity.set((Math.random()-.5)*8,Math.random()*6,(Math.random()-.5)*8);w.emit(temp,velocity,0xddff8e);}}
@@ -79,12 +81,12 @@ function initialize(w){
  function updateHud(){
    $('time').textContent=formatTime(state.mode==='stunt'?Math.max(0,90-state.time):state.time);$('score').textContent=String(state.score).padStart(5,'0');$('speed').textContent=Math.round(Math.abs(state.speed)*2.23694);$('altitude').textContent=state.y.toFixed(1);$('fuelText').textContent=state.mode==='free'?'∞':`${Math.round(state.air)}%`;$('fuelBar').style.width=state.air+'%';$('fuelBar').style.background=state.air<20?'#ff927a':'#c4a7ff';
    $('fuelHint').textContent=state.mode==='free'?'Unlimited cold-gas supply':state.air<15?'Low air · land to recharge':state.grounded?'Ground compressor active':'Gates also refill the tank';
-   $('vehicleState').textContent=state.mode==='research'?(state.grounded?'WEIGHT ON WHEELS':state.precision?'HOVER CONTROLLER ACTIVE':state.lifting?'THRUST VECTOR ENGAGED':'BALLISTIC FLIGHT'):state.loopAngle!==null?'SUCTION LOCKED':state.boosting?'MAIN THRUSTERS ACTIVE':state.grounded?'GROUND CONTACT':state.lifting?'LIFT THRUSTERS ACTIVE':'AIRBORNE';
+   $('vehicleState').textContent=isResearchMode(state.mode)?(state.grounded?'WEIGHT ON WHEELS':state.precision?'HOVER CONTROLLER ACTIVE':state.lifting?'THRUST VECTOR ENGAGED':'BALLISTIC FLIGHT'):state.loopAngle!==null?'SUCTION LOCKED':state.boosting?'MAIN THRUSTERS ACTIVE':state.grounded?'GROUND CONTACT':state.lifting?'LIFT THRUSTERS ACTIVE':'AIRBORNE';
    $('suctionState').textContent=state.suction?'ON':'OFF';$('cameraName').textContent=['CHASE CAM','HOOD CAM','WIDE CAM'][cameraMode];
    speedTicks.forEach((t,i)=>t.classList.toggle('lit',i<Math.abs(state.speed)/91*22));
-   if(state.mode==='research'){
-     const target=RESEARCH_STAGES[Math.min(state.stage,4)];
-     $('objective').innerHTML=`${target.name} <span>/ ${String(Math.min(state.stage+1,5)).padStart(2,'0')} OF 05</span>`;
+   if(isResearchMode(state.mode)){
+     const target=state.mode==='dynamics'?{name:'DAMPER / SURFACE LAB',detail:'Drive straight. Feel the speed humps, washboard and cross-axle rut in the chassis response.'}:RESEARCH_STAGES[Math.min(state.stage,4)];
+     $('objective').innerHTML=state.mode==='dynamics'?'SUSPENSION PROVING GROUND':`${target.name} <span>/ ${String(Math.min(state.stage+1,5)).padStart(2,'0')} OF 05</span>`;
      $('guidance').textContent=target.detail;updateResearchHud(target);
    }else if(state.mode==='trial'||state.mode==='launch'){
      const missionLength=missionGateCount(state.mode);
@@ -98,7 +100,7 @@ function initialize(w){
    drawMap();
  }
  function updateResearchHud(target){
-   $('researchStageNumber').textContent=`${String(Math.min(5,state.stage+1)).padStart(2,'0')} / 05`;
+   $('researchStageNumber').textContent=state.mode==='dynamics'?'TRACK  /  03':'0'+Math.min(5,state.stage+1)+' / 05';
    $('researchStageName').textContent=target.name;
    $('researchStageDetail').textContent=target.detail;
    $('researchVSpeed').textContent=(state.vy>=0?'+':'')+state.vy.toFixed(1);
@@ -107,8 +109,17 @@ function initialize(w){
    $('researchFuel').textContent=state.propellant.toFixed(0);
    $('researchTemp').textContent=state.temperature.toFixed(0);
    $('researchStructure').textContent=state.structural.toFixed(0);
+   $('chassisGrip').textContent=Math.round(suspension.grip*100)+'%';
+   $('chassisRide').textContent=(suspension.heave*1000).toFixed(0)+' mm';
+   $('chassisRoll').textContent=(suspension.roll*180/Math.PI).toFixed(1)+'°';
+   $('chassisContacts').textContent=suspension.contactCount+' / 4';
+   for(let i=0;i<4;i++){
+      $('corner'+i+'Load').textContent=(suspension.normalForces[i]/1000).toFixed(1)+' kN';
+      $('corner'+i+'Travel').style.height=(14+Math.round(80*(suspension.compression[i]/SUSPENSION.maxCompression)))+'%';
+      $('corner'+i).classList.toggle('no-contact',suspension.normalForces[i]<1);
+   }
    $('researchStageNumber').style.color=state.structural<35?'#ff978a':'#b5eaf4';
-   $('horizonGround').style.transform=`translateY(${clamp(state.pitch,-.3,.3)*130}px) rotate(${clamp(state.roll,-.45,.45)*180/Math.PI}deg)`;
+   $('horizonGround').style.transform=`translateY(${clamp(state.pitch+suspension.pitch,-.3,.3)*130}px) rotate(${clamp(state.roll+suspension.roll,-.45,.45)*180/Math.PI}deg)`;
    $('precisionButton').classList.toggle('selected',state.precision);$('assistButton').classList.toggle('selected',state.assist);
    $('precisionButton').querySelector('b').textContent=state.precision?'ON':'OFF';
    $('assistButton').querySelector('b').textContent=state.assist?'ON':'OFF';
@@ -128,11 +139,11 @@ function initialize(w){
    }
    c.font='9px monospace';c.fillStyle='#a9f0ff';c.fillText('ALT',7,12);c.fillStyle='#d7a8ff';c.fillText('THRUST',42,12);
  }
- function togglePrecision(){if(state.mode!=='research'||phase!=='running')return;setPrecision(state,!state.precision);displayCallout(state.precision?'ALTITUDE HOLD ENGAGED':'MANUAL VERTICAL CONTROL',state.precision?'PROPELLANT CONSUMPTION CONTINUES':'BALLISTIC DESCENT',1.5);}
- function toggleAssist(){if(state.mode!=='research'||phase!=='running')return;state.assist=!state.assist;displayCallout(state.assist?'STABILITY AUGMENTATION ON':'DIRECT THRUSTER RESPONSE',state.assist?'WIND COMPENSATION ENABLED':'MANUAL CORRECTION REQUIRED',1.5);}
+ function togglePrecision(){if(!isResearchMode(state.mode)||phase!=='running')return;setPrecision(state,!state.precision);displayCallout(state.precision?'ALTITUDE HOLD ENGAGED':'MANUAL VERTICAL CONTROL',state.precision?'PROPELLANT CONSUMPTION CONTINUES':'BALLISTIC DESCENT',1.5);}
+ function toggleAssist(){if(!isResearchMode(state.mode)||phase!=='running')return;state.assist=!state.assist;displayCallout(state.assist?'STABILITY AUGMENTATION ON':'DIRECT THRUSTER RESPONSE',state.assist?'WIND COMPENSATION ENABLED':'MANUAL CORRECTION REQUIRED',1.5);}
  function captureData(){
    if(!lastFlightLog.length)return;
-   const columns=['seconds','x_m','altitude_m','z_m','yaw_rad','pitch_rad','roll_rad','vx_ms','vy_ms','vz_ms','thrust_g','propellant_kg','nozzle_C','airframe_percent','stage'];
+   const columns=['seconds','x_m','altitude_m','z_m','yaw_rad','pitch_rad','roll_rad','vx_ms','vy_ms','vz_ms','thrust_g','propellant_kg','nozzle_C','airframe_percent','stage','FL_travel_m','FR_travel_m','RL_travel_m','RR_travel_m','FL_normal_N','FR_normal_N','RL_normal_N','RR_normal_N','chassis_heave_m','chassis_pitch_rad','chassis_roll_rad'];
    const rows=[columns.join(','),...lastFlightLog.map(row=>row.map(v=>typeof v==='number'?v.toFixed(3):v).join(','))];
    const uri=URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv;charset=utf-8'}));
    const a=document.createElement('a');a.href=uri;a.download='roadster-xflight-blackbox-'+Date.now()+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(uri),1000);
@@ -143,6 +154,7 @@ function initialize(w){
    while(replayIndex>0&&lastFlightLog[replayIndex][0]>replayElapsed)replayIndex--;
    const q=lastFlightLog[replayIndex];
    [state.time,state.x,state.y,state.z,state.yaw,state.pitch,state.roll,state.vx,state.vy,state.vz,state.thrustG,state.propellant,state.temperature,state.structural,state.stage]=q;
+   if(q.length>=26){suspension.wheelTravel=q.slice(15,19);suspension.normalForces=q.slice(19,23);[suspension.heave,suspension.pitch,suspension.roll]=q.slice(23,26);}
    state.air=100*state.propellant/260;state.grounded=state.y<.01;state.speed=Math.hypot(state.vx,state.vz);
    state.windX=0;state.windZ=0;
    $('replayTime').textContent=formatTime(replayElapsed);
@@ -167,7 +179,15 @@ function initialize(w){
      const mobile=innerWidth<650;car.position.set(0,.45+Math.sin(elapsed*.65)*.10,42);car.rotation.set(-.03,.25+Math.sin(elapsed*.12)*.08,.01);car.scale.setScalar(mobile?1.25:1.5);
      camDesired.set(mobile?10:7,mobile?4.8:3.7,mobile?58:53.5);lookDesired.set(mobile?-3.4:-3.3,mobile?2.5:.55,42);camera.fov=mobile?48:41;
    }else{
-     car.scale.setScalar(1);car.position.set(state.x,y,state.z);car.rotation.set(0,state.yaw,0);car.userData.body.rotation.set(state.pitch,0,state.roll+(state.grounded?0:((keys.has('KeyA')?1:0)-(keys.has('KeyD')?1:0))*.13));
+     car.scale.setScalar(1);car.position.set(state.x,y,state.z);car.rotation.set(0,state.yaw,0);
+     car.userData.body.position.y=suspension.heave;
+     car.userData.body.rotation.set(state.pitch+suspension.pitch,0,state.roll+suspension.roll);
+     if(car.userData.springs)car.userData.springs.forEach(({carrier,strut,piston,spring},i)=>{
+       const travel=suspension.wheelTravel[i];
+       carrier.position.y=travel;
+       piston.position.y=-.35+travel*.35;spring.position.y=-.16+travel*.18;
+       spring.scale.set(1,1,Math.max(.65,1-travel*.8));
+     });
      const sy=Math.sin(state.yaw),cy=Math.cos(state.yaw);
      if(cameraMode===1&&state.loopAngle===null){camDesired.set(state.x-sy*1.5,y+1.5,state.z-cy*1.5);lookDesired.set(state.x-sy*30,y+1.2,state.z-cy*30);}
      else if(state.loopAngle!==null){camDesired.set(LOOP.x+38,20,LOOP.z+32);lookDesired.set(state.x,state.y+1,state.z);}
@@ -187,15 +207,16 @@ function initialize(w){
      accumulator+=dt;
      while(accumulator>=1/120&&phase==='running'){
        const input={throttle:keys.has('KeyW')||keys.has('ArrowUp'),brake:keys.has('KeyS')||keys.has('ArrowDown'),left:keys.has('KeyA')||keys.has('ArrowLeft'),right:keys.has('KeyD')||keys.has('ArrowRight'),lift:keys.has('Space'),boost:keys.has('ShiftLeft')||keys.has('ShiftRight'),roll:rollInput};rollInput=0;
-       if(state.mode==='research')handleEvents(stepResearch(state,{...input,strafeLeft:keys.has('KeyJ'),strafeRight:keys.has('KeyL')},1/120));else handleEvents(step(state,input,1/120));accumulator-=1/120;
+       if(isResearchMode(state.mode))handleEvents(stepResearch(state,{...input,strafeLeft:keys.has('KeyJ'),strafeRight:keys.has('KeyL')},1/120));else handleEvents(step(state,input,1/120));
+       suspensionStep(suspension,state,1/120,{mass:isResearchMode(state.mode)?1900+state.propellant:2160});state.suspension=suspension;accumulator-=1/120;
      }
      if(calloutTime>0){calloutTime-=dt;if(calloutTime<=0)$('callout').classList.remove('show');}
    }
    if(phase==='replay'){if(replayPlaying){replayElapsed=Math.min(lastFlightLog.at(-1)[0],replayElapsed+dt);if(replayElapsed>=lastFlightLog.at(-1)[0])replayPlaying=false;}setReplayFrame();updateHud();w.setResearchPhase(true,state.stage);} 
    positionCamera(dt);if(phase==='menu')car.userData.body.rotation.set(0,0,0);
    const active=phase==='running';
-   if(active&&state.mode==='research'){
-     logTimer+=dt;if(logTimer>=.05){logTimer=0;const sample=[state.time,state.x,state.y,state.z,state.yaw,state.pitch,state.roll,state.vx,state.vy,state.vz,state.thrustG,state.propellant,state.temperature,state.structural,state.stage];
+   if(active&&isResearchMode(state.mode)){
+     logTimer+=dt;if(logTimer>=.05){logTimer=0;const sample=[state.time,state.x,state.y,state.z,state.yaw,state.pitch,state.roll,state.vx,state.vy,state.vz,state.thrustG,state.propellant,state.temperature,state.structural,state.stage,...suspension.wheelTravel,...suspension.normalForces,suspension.heave,suspension.pitch,suspension.roll];
        if(flightLog.length<3600)flightLog.push(sample);trace.push([state.time,state.y,state.thrustG]);if(trace.length>180)trace.shift();}
    }
    if(active&&['trial','launch'].includes(state.mode)){
@@ -209,20 +230,27 @@ function initialize(w){
      const angle=Math.atan2(Math.sin(b[4]-a[4]),Math.cos(b[4]-a[4]));
      w.setGhostPose([a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t,a[4]+angle*t,a[5]+(b[5]-a[5])*t,a[6]+(b[6]-a[6])*t]);
    }else w.setGhostPose(null);
-   car.userData.wheels.forEach(t=>{if(active)t.rotation.x-=state.speed*dt/.45;});
+   car.userData.wheels.forEach((t,i)=>{if(active)t.rotation.x=suspension.wheelSpin[i];});
    if((active&&(state.lifting||state.boosting))||phase==='menu'){
      car.updateMatrixWorld();for(let j=0;j<(phase==='menu'?2:5);j++){
        if(state.lifting||phase==='menu'){const x=j%2?-.86:.86,z=j%3?1.4:-1.42;temp.set(x,.24,z).applyMatrix4(car.matrixWorld);velocity.set((Math.random()-.5)*1.8,-7-Math.random()*3,(Math.random()-.5)*1.8);w.emit(temp,velocity);}
        if(active&&state.boosting){temp.set((Math.random()-.5)*1.6,.5,2.5).applyMatrix4(car.matrixWorld);velocity.set(Math.sin(state.yaw)*14,Math.random()*.7,Math.cos(state.yaw)*14);w.emit(temp,velocity);}
      }
    }
-   w.setVehicleEffects(state,elapsed);if(state.mode==='research')w.updateResearchScene(state,elapsed);
+   w.setVehicleEffects(state,elapsed);if(isResearchMode(state.mode))w.updateResearchScene(state,elapsed);
    w.updateParticles(dt);
    if(phase!=='menu')updateHud();
-   if(audioContext){const play=soundEnabled&&active;engine.frequency.setTargetAtTime(80+Math.abs(state.speed)*7,audioContext.currentTime,.08);engineGain.gain.setTargetAtTime(play?Math.min(.025,Math.abs(state.speed)*.0004):0,audioContext.currentTime,.08);gasGain.gain.setTargetAtTime(play&&(state.lifting||state.boosting||state.mode==='research'&&state.precision)?.065:0,audioContext.currentTime,.08);}
+   if(audioContext){const play=soundEnabled&&active;engine.frequency.setTargetAtTime(80+Math.abs(state.speed)*7,audioContext.currentTime,.08);engineGain.gain.setTargetAtTime(play?Math.min(.025,Math.abs(state.speed)*.0004):0,audioContext.currentTime,.08);gasGain.gain.setTargetAtTime(play&&(state.lifting||state.boosting||isResearchMode(state.mode)&&state.precision)?.065:0,audioContext.currentTime,.08);}
    renderer.render(scene,camera);
  }
  // Keyboard and touch both feed the exact same physics controls.
+ // Compact HUD on by default. Detailed engineering panels are on demand.
+ $('telemetryToggle').addEventListener('click',()=>{
+   const opened=$('app').dataset.telemetry==='open';
+   $('app').dataset.telemetry=opened?'closed':'open';
+   $('telemetryToggle').setAttribute('aria-expanded',String(!opened));
+   $('telemetryToggle').textContent=opened?'SHOW SYSTEMS':'HIDE SYSTEMS';
+ });
  const gameKeys=new Set(['KeyZ','KeyG','KeyJ','KeyL','KeyT','KeyH','KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','ShiftRight','KeyQ','KeyE','KeyF','KeyC','KeyR']);
  window.addEventListener('keydown',e=>{
    if(e.code==='KeyM'&&!e.repeat){toggleSound();return;}
@@ -232,7 +260,7 @@ function initialize(w){
    if(e.code==='Escape'||e.code==='KeyP'){if(phase==='paused'){e.preventDefault();resume();}else if(phase==='running'||phase==='countdown'){e.preventDefault();pause();}return;}
    if(phase!=='running'&&phase!=='countdown')return;
    if(gameKeys.has(e.code))e.preventDefault();keys.add(e.code);
-   if(!e.repeat){if(e.code==='KeyZ'){togglePrecision();return;}if(e.code==='KeyG'){toggleAssist();return;}if(e.code==='KeyQ')rollInput=1;if(e.code==='KeyE')rollInput=-1;if(e.code==='KeyC'){cameraMode=(cameraMode+1)%3;positionCamera(1,true);}if(e.code==='KeyF'){state.suction=!state.suction;displayCallout(state.suction?'SUCTION ENABLED':'SUCTION OFF',state.suction?'WEST LOOP READY':'FREE ROLLING',1.3);}if(e.code==='KeyR'){if(state.mode==='research'){start();return;}resetPosition(state,phase==='running');positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);}}
+   if(!e.repeat){if(e.code==='KeyZ'){togglePrecision();return;}if(e.code==='KeyG'){toggleAssist();return;}if(e.code==='KeyQ')rollInput=1;if(e.code==='KeyE')rollInput=-1;if(e.code==='KeyC'){cameraMode=(cameraMode+1)%3;positionCamera(1,true);}if(e.code==='KeyF'){state.suction=!state.suction;displayCallout(state.suction?'SUCTION ENABLED':'SUCTION OFF',state.suction?'WEST LOOP READY':'FREE ROLLING',1.3);}if(e.code==='KeyR'){if(isResearchMode(state.mode)){start();return;}resetPosition(state,phase==='running');positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);}}
  });
  window.addEventListener('keyup',e=>keys.delete(e.code));
  window.addEventListener('blur',()=>{clearKeys();pause();});
@@ -242,7 +270,7 @@ function initialize(w){
    for(const ev of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(ev,()=>{keys.delete(key);button.classList.remove('pressed');});
  }
  document.querySelector('[data-action="roll"]').addEventListener('pointerdown',e=>{e.preventDefault();rollInput=1;});
- document.querySelector('[data-action="reset"]').addEventListener('pointerdown',e=>{e.preventDefault();if(phase!=='running')return;if(state.mode==='research'){start();return;}resetPosition(state);positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);});
+ document.querySelector('[data-action="reset"]').addEventListener('pointerdown',e=>{e.preventDefault();if(phase!=='running')return;if(isResearchMode(state.mode)){start();return;}resetPosition(state);positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);});
  $('precisionButton').addEventListener('click',togglePrecision);$('assistButton').addEventListener('click',toggleAssist);
  document.querySelector('[data-action="precision"]').addEventListener('pointerdown',e=>{e.preventDefault();togglePrecision();});
  document.querySelector('[data-action="stabilize"]').addEventListener('pointerdown',e=>{e.preventDefault();toggleAssist();});
@@ -259,7 +287,7 @@ function initialize(w){
  for(const id of ['controlsDialog','referencesDialog'])$(id).addEventListener('close',()=>{if(id==='referencesDialog'){$('videoContainer').replaceChildren();$('loadVideo').classList.remove('hidden');}if(phase==='modal'){setPhase(previousModalPhase==='countdown'?'countdown':'running');clearKeys();last=performance.now();}});
  $('pauseDialog').addEventListener('cancel',e=>{e.preventDefault();resume();});$('resultsDialog').addEventListener('cancel',e=>{e.preventDefault();menu();});
  $('loadVideo').addEventListener('click',()=>{const f=document.createElement('iframe');f.src='https://www.youtube-nocookie.com/embed/qt5p-_tE8d0?autoplay=1';f.title='Tesla Roadster Event — original reveal';f.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';f.allowFullscreen=true;f.referrerPolicy='strict-origin-when-cross-origin';$('videoContainer').appendChild(f);$('loadVideo').classList.add('hidden');});
- document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{selectedMode=b.dataset.mode;document.querySelectorAll('[data-mode]').forEach(m=>{m.classList.toggle('active',m===b);m.setAttribute('aria-pressed',String(m===b));});$('startButton').innerHTML=selectedMode==='research'?'INITIATE TEST FLIGHT <span>↗</span>':selectedMode==='free'?'EXPLORE THE RANGE <span>↗</span>':selectedMode==='stunt'?'START STUNT RUN <span>↗</span>':'START FLIGHT <span>↗</span>';tone(450,.08);}));
+ document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{selectedMode=b.dataset.mode;document.querySelectorAll('[data-mode]').forEach(m=>{m.classList.toggle('active',m===b);m.setAttribute('aria-pressed',String(m===b));});$('startButton').innerHTML=selectedMode==='research'?'INITIATE TEST FLIGHT <span>↗</span>':selectedMode==='dynamics'?'BEGIN CHASSIS TEST <span>↗</span>':selectedMode==='free'?'EXPLORE THE RANGE <span>↗</span>':selectedMode==='stunt'?'START STUNT RUN <span>↗</span>':'START FLIGHT <span>↗</span>';tone(450,.08);}));
  window.addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();positionCamera(1,true);});
  renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();pause();$('errorPanel').classList.remove('hidden');$('errorMessage').textContent='The graphics connection was lost. Reload to restart the test range.';});
  try{environmentIndex=Number(localStorage.getItem('roadster-v2-lighting')||0)%3;if(environmentIndex<0||!Number.isFinite(environmentIndex))environmentIndex=0;}catch{} $('environmentButton').textContent=w.setEnvironment(environmentIndex);
