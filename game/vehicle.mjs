@@ -10,12 +10,12 @@ export const VEHICLE={
 };
 // Laboratory approximation: load sensitivity and compound temperature response.
 // Peak friction occurs at a warm tread. No measured OEM tire data is assumed.
-export function effectiveTireMu(base,tempC,normalN,velocity=0){
+export function effectiveTireMu(base,tempC,normalN,velocity=0,wear=0){
   const tempFactor=clamp(1-Math.pow((tempC-62)/155,2),.64,1.02);
   const loadFactor=clamp(1-.105*(normalN/5300-1),.80,1.12);
   const wet=base<.75;
   const waterFactor=wet?1-.23*clamp((Math.abs(velocity)-18)/47,0,1):1;
-  return clamp(base*tempFactor*loadFactor*waterFactor,.09,1.9);
+  return clamp(base*tempFactor*loadFactor*waterFactor*(1-.34*clamp(wear,0,1)),.09,1.9);
 }
 export function brakeFadeFactor(rotorC){return clamp(1-.62*clamp((rotorC-360)/340,0,1),.38,1);}
 const corners=[[-1.08,-1.48],[1.08,-1.48],[-1.08,1.45],[1.08,1.45]];
@@ -24,6 +24,7 @@ export function makeVehicleDynamics(){return {
  wheelOmega:[0,0,0,0],longitudinalSlip:[0,0,0,0],slipAngles:[0,0,0,0],
  tireForceX:[0,0,0,0],tireForceY:[0,0,0,0],wheelLoads:[0,0,0,0],
  tireTemperature:[27,27,27,27],brakeTemperature:[28,28,28,28],
+ tireWear:[0,0,0,0],tcsEnabled:true,tcsActive:false,torqueLimit:1,gear:"D",shiftHold:0,
  soc:88,regenKw:0,powerKw:0,absActive:false,escActive:false,
  longitudinalAccel:0,lateralAccel:0,velocityForward:0,velocityLateral:0,
  gripUtilization:0,brakeDistance:0,contactImpacts:0,impactEnergyJ:0
@@ -45,18 +46,33 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
  if(dt===0)return d;
  const m=options.mass||VEHICLE.mass,mu=clamp(options.mu??s.roadMu??VEHICLE.friction,.12,1.8);
  const steer=(input.left?1:0)-(input.right?1:0);
- const forward=(input.throttle?1:0)-(input.brake?1:0);
  const c=Math.cos(s.yaw),si=Math.sin(s.yaw);
  const vf=-s.vx*si-s.vz*c,vr=s.vx*c-s.vz*si;
  const speed=Math.hypot(vf,vr);
+ // Automotive direction selection: brake to a complete stop before reverse.
+ // The held opposite pedal engages the requested direction after 0.3 s;
+ // switching while rolling instead requests the brakes, never instant inversion.
+ const forwardKey=!!input.throttle&&!input.brake,reverseKey=!!input.brake&&!input.throttle;
+ const shifting=(d.gear==='D'&&reverseKey)||(d.gear==='R'&&forwardKey);
+ d.shiftHold=shifting&&Math.abs(vf)<.36?d.shiftHold+dt:0;
+ if(d.shiftHold>.3){d.gear=d.gear==='D'?'R':'D';d.shiftHold=0;}
+ const driving=(d.gear==='D'&&forwardKey)||(d.gear==='R'&&reverseKey);
+ const braking=(d.gear==='D'&&reverseKey)||(d.gear==='R'&&forwardKey);
+ const driveDirection=d.gear==='D'?1:-1;
  // Rack has steering inertia, rack-angle limiting and speed-dependent range.
  const steerLimit=.48/(1+Math.pow(speed/22,1.55));
  const steerTarget=steer*steerLimit;
  d.steerAngle+=clamp(steerTarget-d.steerAngle,-1.55*dt,1.55*dt);
  d.steerCommand=steer;
- const accelPedal=forward>0?1:0,brakePedal=forward<0?1:0;
- const powerTaper=clamp(1-speed/96,.17,1);
- const driveTotal=accelPedal*VEHICLE.maxDriveN*powerTaper*(input.boost?1.28:1);
+ const accelPedal=driving?1:0,brakePedal=braking?1:0;
+ const powerTaper=clamp(1-speed/(d.gear==='R'?15:96),.06,1);
+ // Per-wheel slip is sampled from the previous 120 Hz step; the next motor
+ // command trims wheel torque when the demanded slip exceeds peak traction.
+ const slipExcess=Math.max(...d.longitudinalSlip.map(v=>Math.max(0,driveDirection*v-.12)));
+ const torqueLimit=d.tcsEnabled&&driving?clamp(1-1.8*slipExcess,.20,1):1;
+ d.torqueLimit+=(torqueLimit-d.torqueLimit)*(1-Math.exp(-24*dt));
+ d.tcsActive=!!d.tcsEnabled&&driving&&d.torqueLimit<.95;
+ const driveTotal=driveDirection*accelPedal*VEHICLE.maxDriveN*powerTaper*(input.boost?1.28:1)*d.torqueLimit*(d.gear==='R'?.5:1);
  const brakeTotal=brakePedal*VEHICLE.maxBrakingN;
  let sumFx=0,sumFy=0,torque=0,maxUtil=0,abs=false;
  const previousAx=d.longitudinalAccel,previousAy=d.lateralAccel;
@@ -71,13 +87,13 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
    // Pacejka-inspired smooth saturation, relative to instantaneous vertical load.
    // Lateral tire force does not exist at zero wheel contact.
    const slipAngle=Math.atan2(wheelSide,Math.max(2,Math.abs(wheelLong)));
-   const tireMu=effectiveTireMu(mu,d.tireTemperature[i],n,speed);
+   const tireMu=effectiveTireMu(mu,d.tireTemperature[i],n,speed,d.tireWear[i]);
    const lateralMax=tireMu*n;
    let fy=-lateralMax*Math.tanh(VEHICLE.corneringRate*slipAngle);
    const axleFraction=front?.46:.54;
    const drive=driveTotal*axleFraction/2;
    const brake=brakeTotal*(front?.62:.38)/2*brakeFadeFactor(d.brakeTemperature[i]);
-   const roadSign=wheelLong>=-.1?1:-1;
+   const roadSign=wheelLong>.12?1:wheelLong<-.12?-1:0;
    let demand=drive-brake*roadSign;
    // Combine braking and cornering inside a friction circle (not independent grip).
    const longitudinalLimit=Math.sqrt(Math.max(0,lateralMax*lateralMax-fy*fy));
@@ -100,6 +116,9 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
    maxUtil=Math.max(maxUtil,lateralMax>0?Math.hypot(fx,fy)/lateralMax:0);
    const slipHeat=Math.abs(fy*wheelSide)+Math.abs(fx*(d.wheelOmega[i]*VEHICLE.wheelRadius-wheelLong));
    d.tireTemperature[i]=clamp(d.tireTemperature[i]+(slipHeat*.000075-(d.tireTemperature[i]-26)*.06)*dt,10,145);
+   // Wear accrues from frictional work at the contact patch (not distance
+   // alone); a sliding tire wears faster, progressively losing adhesion.
+   d.tireWear[i]=clamp(d.tireWear[i]+slipHeat*dt/8.5e7,0,1);
    const discHeat=Math.abs(brake*wheelLong)*.00048;
    d.brakeTemperature[i]=clamp(d.brakeTemperature[i]+(discHeat-(d.brakeTemperature[i]-27)*(.032+speed*.0007))*dt,20,690);
  }
@@ -120,6 +139,9 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
  // Dynamic longitudinal and lateral velocities in car coordinates.
  const ax=sumFx/m,ay=sumFy/m;
  let nextForward=vf+ax*dt+vr*d.yawRate*dt;
+ // Hydraulic braking is dissipative: it cannot propel the car across zero.
+ if(brakePedal&&Math.abs(vf)<.22)nextForward=0;
+ else if(brakePedal&&vf*nextForward<0)nextForward=0;
  let nextSide=vr+ay*dt-vf*d.yawRate*dt;
  if(!accelPedal&&!brakePedal&&Math.abs(nextForward)<.015)nextForward=0;
  s.yaw+=d.yawRate*dt;
@@ -145,7 +167,7 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
  d.longitudinalAccel=ax;d.lateralAccel=ay;d.velocityForward=nextForward;d.velocityLateral=nextSide;
  d.gripUtilization=clamp(maxUtil,0,1);d.absActive=abs;
  // Effective traction battery state: driving depletes, regenerative deceleration restores.
- const tractionWatts=driveTotal*Math.max(0,nextForward),recuperatedWatts=brakePedal?Math.min(VEHICLE.regenBrakingN*Math.max(0,nextForward),VEHICLE.regenBrakingN*25):0;
+ const tractionWatts=Math.abs(driveTotal*nextForward),recuperatedWatts=brakePedal?Math.min(VEHICLE.regenBrakingN*Math.abs(nextForward),VEHICLE.regenBrakingN*25):0;
  const regen=Math.min(50000,recuperatedWatts)*.68;
  d.powerKw=tractionWatts/1000/0.91;d.regenKw=regen/1000;
  d.soc=clamp(d.soc+(regen-d.powerKw*1000)*dt/(VEHICLE.capacityKWh*3.6e6)*100,0,100);

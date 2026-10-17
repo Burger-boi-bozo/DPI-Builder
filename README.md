@@ -1,4 +1,4 @@
-# Roadster X-Flight — Experimental Flight Lab V2.8
+# Roadster X-Flight — Experimental Flight Lab V2.9
 
 A self-hosted, original experimental-flight concept built on the recovered Roadster Flight Lab V1. This is **not** a physics-validated Tesla Roadster representation. Thruster characteristics, mass, aerodynamics, structural/thermal limits, and safety systems are hypothetical parameters designed for a playable R&D simulator. Not affiliated with Tesla or SpaceX.
 
@@ -32,7 +32,7 @@ The live R&D instrument suite includes attitude/horizon indicator, vertical velo
 
 ## Controls
 
-`W/S` drive/forward impulse, `A/D` yaw, `Space` apply upward thrusters, `Shift` boost, `J/L` strafe using lateral jets (X-Flight), `Z` toggle active altitude hold (consumes propellant), `G` toggle stability augmentation. `Q/E` barrel-roll on legacy modes, `F` toggle suction loop, `C` cycle cameras, `R` reset, `T` cycle lighting, `H` save a screenshot, `M` toggle sound, `P/Escape` pause.
+`W/S` drive/forward impulse, `A/D` yaw, `Space` apply upward thrusters, `Shift` boost, `J/L` strafe using lateral jets (X-Flight), `Z` toggle active altitude hold (consumes propellant), `G` toggle stability augmentation. `Q/E` barrel-roll on legacy modes, `F` toggle suction loop, `C` cycle cameras, `R` reset, `T` cycle lighting, `H` save a screenshot, `M` toggle sound, `P/Escape` pause. In Suspension Lab, hold `S` while stopped to engage Reverse (after 0.3 s); hold `W` after stopping to return to Drive, and use `K` to toggle traction control.
 
 ## Run locally
 
@@ -40,7 +40,7 @@ Serve `game/` as a static directory. For example: `python3 -m http.server 18767 
 
 ## Test and deploy
 
-`node --test tests/*.test.mjs` runs 59 deterministic checks across V1 heritage physics, flight certification, suspension, four-contact-patch tire dynamics, collisions, and CPU-level 3D model integrity. `node --check game/*.mjs` verifies syntax. UI logic is additionally tested using a mocked renderer to exercise flight startup, telemetry, hover controller and checkpoint reset. **Full visual/WebGL playtesting on a GPU-enabled browser is still required.** The working sandbox blocks full WebGL; automated browser UI interactions use a renderer stub, while all 3D meshes receive direct CPU-level geometry integrity tests. GPU-rendered QA remains outstanding.
+`node --test tests/*.test.mjs` runs 65 deterministic checks across V1 heritage physics, flight certification, suspension, four-contact-patch tire dynamics, collisions, and CPU-level 3D model integrity. `node --check game/*.mjs` verifies syntax. UI logic is additionally tested using a mocked renderer to exercise flight startup, telemetry, hover controller and checkpoint reset. **Full visual/WebGL playtesting on a GPU-enabled browser is still required.** The working sandbox blocks full WebGL; automated browser UI interactions use a renderer stub, while all 3D meshes receive direct CPU-level geometry integrity tests. GPU-rendered QA remains outstanding.
 
 Production: Proxmox `pve` at `/opt/roadster-flight`, service `roadster-flight.service`, loopback port `18767`, Cloudflare `https://fly.dpifiles.org`. Run `bash deploy/install-on-proxmox.sh` as root from a current `roadster-flight-v2` checkout to test, back up the previous version and swap in the self-contained archive. Source branch and release archive remain synchronized.
 
@@ -73,3 +73,10 @@ The physics is a high-fidelity *concept-level* sprung-body simulation, not an OE
 The Suspension Lab is now an adjustable **chassis test bench**, not a static suspension demo. Switch **Comfort**, **Balanced**, and **Track** (`B` or the Show Systems drawer); adjust spring stiffness and damper response independently while monitoring kN wheel loads, ride RMS vertical g, peak body roll, wheel airtime, and bump-stop events. The spring preload is automatically recalculated to hold the same static ride height so setup comparisons start from a meaningful reference. The benchmark control requires passing the first speed hump; restart the identical course to compare another setup under matched conditions. Results are local to the current session. Suspension coefficients remain deliberately hypothetical.
 
 New ground-vehicle dynamics include tire-temperature and load-sensitive grip, a speed-dependent loss of wet-surface adhesion, brake fade under high rotor temperatures, heat/cooling, finite skid decals triggered by actual contact-patch slip, and visible brake/rotor feedback. These are approximate controlled models, not verified tire-compound data or real Roadster braking specifications. Flight-only instruments are removed from the Suspension Lab's engineering drawer; chassis tuning is accessible first on desktop and mobile.
+
+## V2.9 — Driveline realism / launch-control lab
+
+- Reverse is a distinct gear, requested by holding **S** after the vehicle stops for 0.3 seconds. **W** requests drive after coming to a stop. No direction flips at speed.
+- On the Suspension Lab test strip, **K** toggles motor torque traction control. Slip-based torque reduction uses the previous 120 Hz tire slip estimate, and is reported on the diagnostics panel.
+- Tire wear accumulates from slipping work, degrades available adhesion, and is reported as average tread wear. Releasing the pedals preserves the selected gear and gives the drive wheels a chance to regain contact traction.
+- A CSV export is available live from the Suspension Lab workbench, with four tire wear channels and torque-control status appended to each 20 Hz sample. Ground and flight modes remain separate; the speculative flying performance is not real-world Tesla specification data.

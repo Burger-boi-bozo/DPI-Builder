@@ -37,7 +37,7 @@ cleanup() {
 trap cleanup EXIT
 python3 -m zipfile -e "$ARCHIVE" "$STAGE"
 [ -s "$STAGE/game/index.html" ] && [ -s "$STAGE/game/research.mjs" ] && [ -s "$STAGE/game/suspension.mjs" ] && [ -s "$STAGE/game/vehicle.mjs" ] && [ -s "$STAGE/game/three.module.min.js" ]
-grep -q 'Roadster / Experimental Flight V2.8' "$STAGE/game/index.html"
+grep -q 'Roadster / Experimental Flight V2.9' "$STAGE/game/index.html"
 mkdir -p "$ROOT/releases"
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 if [ -d "$ROOT/dist" ]; then BACKUP="$ROOT/releases/previous-$STAMP";mv "$ROOT/dist" "$BACKUP";fi
@@ -48,9 +48,9 @@ chown -R root:root "$ROOT/dist"
 if ! systemctl is-active --quiet roadster-flight.service; then systemctl restart roadster-flight.service;fi
 sleep 1
 curl -fsSI --max-time 8 http://127.0.0.1:18767/ >/dev/null
-curl -fsS --max-time 8 http://127.0.0.1:18767/ | grep -q 'Roadster / Experimental Flight V2.8'
+curl -fsS --max-time 8 http://127.0.0.1:18767/ | grep -q 'Roadster / Experimental Flight V2.9'
 curl -fsSI --max-time 8 http://127.0.0.1:18767/research.mjs >/dev/null
 curl -fsSI --max-time 8 http://127.0.0.1:18767/suspension.mjs >/dev/null
 curl -fsSI --max-time 8 http://127.0.0.1:18767/vehicle.mjs >/dev/null
 SWAPPED=0
-printf 'V2.8 deployed to %s/dist; previous release %s\n' "$ROOT" "$BACKUP"
+printf 'V2.9 deployed to %s/dist; previous release %s\n' "$ROOT" "$BACKUP"

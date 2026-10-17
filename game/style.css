@@ -171,3 +171,10 @@
  #app[data-mode="dynamics"] .suspension-metrics{padding-top:6px}
  #app[data-mode="dynamics"] .bench-readouts{gap:4px}
 }
+
+/* V2.9 motorsport lab: controls stay at the point of measurement. */
+.dynamics-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.dynamics-actions .surface-toggle{flex:1 1 115px;white-space:normal;line-height:1.25;min-height:38px}
+#tractionToggle[aria-pressed="false"]{background:#50292e;border-color:#e8988a88;color:#fff0e6}
+#driveGear{color:#e4ff95!important;font-size:21px}
+#driveTorque,#driveWear{font-variant-numeric:tabular-nums}

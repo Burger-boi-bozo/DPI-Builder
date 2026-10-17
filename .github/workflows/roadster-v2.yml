@@ -31,4 +31,5 @@ jobs:
           test -s game/suspension.mjs
           test -s game/vehicle.mjs
           test -s artifacts/roadster-v2-deploy.zip
-          grep -q 'Roadster / Experimental Flight V2.8' game/index.html
+          grep -q 'Roadster / Experimental Flight V2.9' game/index.html
+          test -s tests/driveline-v29.test.mjs

@@ -132,7 +132,12 @@ function initialize(w){
       $('driveTire').textContent=(d.tireTemperature.reduce((a,b)=>a+b,0)/4).toFixed(0)+'°C';
       $('driveBrake').textContent=(d.brakeTemperature.reduce((a,b)=>a+b,0)/4).toFixed(0)+'°C';
       $('driveGrip').textContent=(d.gripUtilization*100).toFixed(0)+'%';
-      $('driveSafety').textContent=d.absActive?'ABS ACTIVE':d.escActive?'ESC CORRECTING':d.contactImpacts?'FRAME IMPACT '+d.contactImpacts:'FULL TRACTION';
+      $('driveSafety').textContent=d.absActive?'ABS ACTIVE':d.tcsActive?'TORQUE LIMITED':d.escActive?'ESC CORRECTING':d.contactImpacts?'FRAME IMPACT '+d.contactImpacts:'FULL TRACTION';
+      $('driveGear').textContent=d.gear;
+      $('driveWear').textContent=(100*d.tireWear.reduce((a,b)=>a+b,0)/4).toFixed(1)+'%';
+      $('driveTorque').textContent=Math.round(100*d.torqueLimit)+'%';
+      $('tractionToggle').textContent='K · TRACTION CONTROL '+(d.tcsEnabled?'ON':'OFF');
+      $('tractionToggle').setAttribute('aria-pressed',String(d.tcsEnabled));
       $('surfaceToggle').textContent=state.roadMu<.7?'ROAD / WET':'ROAD / DRY';
       $('benchRms').textContent=suspension.rideRmsG.toFixed(3)+' g';
       $('benchRoll').textContent=suspension.peakRollDeg.toFixed(1)+'°';
@@ -164,6 +169,11 @@ function initialize(w){
    }
    c.font='9px monospace';c.fillStyle='#a9f0ff';c.fillText('ALT',7,12);c.fillStyle='#d7a8ff';c.fillText('THRUST',42,12);
  }
+ function toggleTraction(){
+   if(state.mode!=='dynamics'||phase!=='running'||!state.drivetrain)return;
+   const d=state.drivetrain;d.tcsEnabled=!d.tcsEnabled;
+   displayCallout(d.tcsEnabled?'TRACTION CONTROL ENABLED':'TRACTION CONTROL DISABLED',d.tcsEnabled?'MOTOR TORQUE IS MANAGED WHEN TIRES SLIP':'RAW DRIVER TORQUE / WATCH WHEEL SLIP',1.8);
+ }
  function toggleSurface(){if(state.mode!=='dynamics')return;state.roadMu=state.roadMu<.7?1.06:.54;displayCallout(state.roadMu<.7?'WET TEST SURFACE':'DRY TEST SURFACE',state.roadMu<.7?'LESS GRIP / LONGER BRAKING DISTANCE':'FULL TIRE ADHESION',1.6);}
  function updateTuningUI(){
    const t=tuningParameters(suspension.tune);
@@ -189,12 +199,18 @@ function initialize(w){
  }
  function togglePrecision(){if(!isResearchMode(state.mode)||phase!=='running')return;setPrecision(state,!state.precision);displayCallout(state.precision?'ALTITUDE HOLD ENGAGED':'MANUAL VERTICAL CONTROL',state.precision?'PROPELLANT CONSUMPTION CONTINUES':'BALLISTIC DESCENT',1.5);}
  function toggleAssist(){if(!isResearchMode(state.mode)||phase!=='running')return;state.assist=!state.assist;displayCallout(state.assist?'STABILITY AUGMENTATION ON':'DIRECT THRUSTER RESPONSE',state.assist?'WIND COMPENSATION ENABLED':'MANUAL CORRECTION REQUIRED',1.5);}
- function captureData(){
-   if(!lastFlightLog.length)return;
-   const columns=['seconds','x_m','altitude_m','z_m','yaw_rad','pitch_rad','roll_rad','vx_ms','vy_ms','vz_ms','thrust_g','propellant_kg','nozzle_C','airframe_percent','stage','FL_travel_m','FR_travel_m','RL_travel_m','RR_travel_m','FL_normal_N','FR_normal_N','RL_normal_N','RR_normal_N','chassis_heave_m','chassis_pitch_rad','chassis_roll_rad','battery_soc_pct','motor_power_kw','regen_kw','yaw_rate_rads','rack_steer_rad','grip_utilization','FL_tire_C','FR_tire_C','RL_tire_C','RR_tire_C','front_brake_C','rear_brake_C','rail_impacts'];
-   const rows=[columns.join(','),...lastFlightLog.map(row=>row.map(v=>typeof v==='number'?v.toFixed(3):v).join(','))];
+ function captureData(){exportTelemetry(lastFlightLog,'xflight');}
+ function exportDynamicsLog(){
+   if(state.mode!=='dynamics'||flightLog.length<3){displayCallout('NO SAMPLES YET','DRIVE FOR A FEW SECONDS',1.5);return;}
+   exportTelemetry(flightLog,'chassis-lab');
+   displayCallout('RUN DATA EXPORTED',`${flightLog.length} TELEMETRY FRAMES / 20 HZ`,1.6);
+ }
+ function exportTelemetry(data,label){
+   if(!data.length)return;
+   const columns=['seconds','x_m','altitude_m','z_m','yaw_rad','pitch_rad','roll_rad','vx_ms','vy_ms','vz_ms','thrust_g','propellant_kg','nozzle_C','airframe_percent','stage','FL_travel_m','FR_travel_m','RL_travel_m','RR_travel_m','FL_normal_N','FR_normal_N','RL_normal_N','RR_normal_N','chassis_heave_m','chassis_pitch_rad','chassis_roll_rad','battery_soc_pct','motor_power_kw','regen_kw','yaw_rate_rads','rack_steer_rad','grip_utilization','FL_tire_C','FR_tire_C','RL_tire_C','RR_tire_C','front_brake_C','rear_brake_C','rail_impacts','gear','tcs_active','available_torque_pct','FL_wear_pct','FR_wear_pct','RL_wear_pct','RR_wear_pct'];
+   const rows=[columns.join(','),...data.map(row=>row.map(v=>typeof v==='number'?v.toFixed(3):v).join(','))];
    const uri=URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv;charset=utf-8'}));
-   const a=document.createElement('a');a.href=uri;a.download='roadster-xflight-blackbox-'+Date.now()+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(uri),1000);
+   const a=document.createElement('a');a.href=uri;a.download='roadster-'+label+'-'+Date.now()+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(uri),1000);
  }
  function setReplayFrame(){
    if(!lastFlightLog.length)return;
@@ -265,7 +281,7 @@ function initialize(w){
    positionCamera(dt);if(phase==='menu')car.userData.body.rotation.set(0,0,0);
    const active=phase==='running';
    if(active&&isResearchMode(state.mode)){
-     logTimer+=dt;if(logTimer>=.05){logTimer=0;const d=state.drivetrain;const sample=[state.time,state.x,state.y,state.z,state.yaw,state.pitch,state.roll,state.vx,state.vy,state.vz,state.thrustG,state.propellant,state.temperature,state.structural,state.stage,...suspension.wheelTravel,...suspension.normalForces,suspension.heave,suspension.pitch,suspension.roll,d?.soc??0,d?.powerKw??0,d?.regenKw??0,d?.yawRate??0,d?.steerAngle??0,d?.gripUtilization??0,...(d?.tireTemperature??[0,0,0,0]),d?.brakeTemperature?.[0]??0,d?.brakeTemperature?.[2]??0,d?.contactImpacts??0];
+     logTimer+=dt;if(logTimer>=.05){logTimer=0;const d=state.drivetrain;const sample=[state.time,state.x,state.y,state.z,state.yaw,state.pitch,state.roll,state.vx,state.vy,state.vz,state.thrustG,state.propellant,state.temperature,state.structural,state.stage,...suspension.wheelTravel,...suspension.normalForces,suspension.heave,suspension.pitch,suspension.roll,d?.soc??0,d?.powerKw??0,d?.regenKw??0,d?.yawRate??0,d?.steerAngle??0,d?.gripUtilization??0,...(d?.tireTemperature??[0,0,0,0]),d?.brakeTemperature?.[0]??0,d?.brakeTemperature?.[2]??0,d?.contactImpacts??0,d?.gear??'N',d?.tcsActive?1:0,100*(d?.torqueLimit??1),...(d?.tireWear??[0,0,0,0]).map(x=>100*x)];
        if(flightLog.length<3600)flightLog.push(sample);trace.push([state.time,state.y,state.thrustG]);if(trace.length>180)trace.shift();}
    }
    if(active&&['trial','launch'].includes(state.mode)){
@@ -301,7 +317,7 @@ function initialize(w){
    $('telemetryToggle').setAttribute('aria-expanded',String(!opened));
    $('telemetryToggle').textContent=opened?'SHOW SYSTEMS':'HIDE SYSTEMS';
  });
- const gameKeys=new Set(['KeyB','KeyY','KeyZ','KeyG','KeyJ','KeyL','KeyT','KeyH','KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','ShiftRight','KeyQ','KeyE','KeyF','KeyC','KeyR']);
+ const gameKeys=new Set(['KeyK','KeyB','KeyY','KeyZ','KeyG','KeyJ','KeyL','KeyT','KeyH','KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','ShiftRight','KeyQ','KeyE','KeyF','KeyC','KeyR']);
  window.addEventListener('keydown',e=>{
    if(e.code==='KeyM'&&!e.repeat){toggleSound();return;}
    if(e.code==='KeyT'&&!e.repeat){cycleEnvironment();return;}
@@ -310,7 +326,7 @@ function initialize(w){
    if(e.code==='Escape'||e.code==='KeyP'){if(phase==='paused'){e.preventDefault();resume();}else if(phase==='running'||phase==='countdown'){e.preventDefault();pause();}return;}
    if(phase!=='running'&&phase!=='countdown')return;
    if(gameKeys.has(e.code))e.preventDefault();keys.add(e.code);
-   if(!e.repeat){if(e.code==='KeyB'&&state.mode==='dynamics'){const order=['comfort','balanced','track'];changeSetup(order[(order.indexOf(selectedSetup)+1)%order.length]);return;}if(e.code==='KeyY'&&state.mode==='dynamics'){toggleSurface();return;}if(e.code==='KeyZ'){togglePrecision();return;}if(e.code==='KeyG'){toggleAssist();return;}if(e.code==='KeyQ')rollInput=1;if(e.code==='KeyE')rollInput=-1;if(e.code==='KeyC'){cameraMode=(cameraMode+1)%3;positionCamera(1,true);}if(e.code==='KeyF'){state.suction=!state.suction;displayCallout(state.suction?'SUCTION ENABLED':'SUCTION OFF',state.suction?'WEST LOOP READY':'FREE ROLLING',1.3);}if(e.code==='KeyR'){if(isResearchMode(state.mode)){start();return;}resetPosition(state,phase==='running');positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);}}
+   if(!e.repeat){if(e.code==='KeyB'&&state.mode==='dynamics'){const order=['comfort','balanced','track'];changeSetup(order[(order.indexOf(selectedSetup)+1)%order.length]);return;}if(e.code==='KeyY'&&state.mode==='dynamics'){toggleSurface();return;}if(e.code==='KeyK'&&state.mode==='dynamics'){toggleTraction();return;}if(e.code==='KeyZ'){togglePrecision();return;}if(e.code==='KeyG'){toggleAssist();return;}if(e.code==='KeyQ')rollInput=1;if(e.code==='KeyE')rollInput=-1;if(e.code==='KeyC'){cameraMode=(cameraMode+1)%3;positionCamera(1,true);}if(e.code==='KeyF'){state.suction=!state.suction;displayCallout(state.suction?'SUCTION ENABLED':'SUCTION OFF',state.suction?'WEST LOOP READY':'FREE ROLLING',1.3);}if(e.code==='KeyR'){if(isResearchMode(state.mode)){start();return;}resetPosition(state,phase==='running');positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);}}
  });
  window.addEventListener('keyup',e=>keys.delete(e.code));
  window.addEventListener('blur',()=>{clearKeys();pause();});
@@ -322,11 +338,13 @@ function initialize(w){
  document.querySelector('[data-action="roll"]').addEventListener('pointerdown',e=>{e.preventDefault();rollInput=1;});
  document.querySelector('[data-action="reset"]').addEventListener('pointerdown',e=>{e.preventDefault();if(phase!=='running')return;if(isResearchMode(state.mode)){start();return;}resetPosition(state);positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);});
  $('surfaceToggle').addEventListener('click',toggleSurface);
+ $('tractionToggle').addEventListener('click',toggleTraction);
  document.querySelectorAll('[data-setup]').forEach(button=>button.addEventListener('click',()=>changeSetup(button.dataset.setup)));
  for(const [id,key] of [['springTuning','springScale'],['damperTuning','damperScale']]){
    $(id).addEventListener('input',()=>{if(state.mode!=='dynamics')return;setChassisAdjustment(suspension,key,Number($(id).value)/100);updateTuningUI();});
  }
  $('benchBaseline').addEventListener('click',saveBenchmark);
+ $('exportChassisRun').addEventListener('click',exportDynamicsLog);
  $('precisionButton').addEventListener('click',togglePrecision);$('assistButton').addEventListener('click',toggleAssist);
  document.querySelector('[data-action="precision"]').addEventListener('pointerdown',e=>{e.preventDefault();togglePrecision();});
  document.querySelector('[data-action="stabilize"]').addEventListener('pointerdown',e=>{e.preventDefault();toggleAssist();});
