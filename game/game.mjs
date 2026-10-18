@@ -1,8 +1,9 @@
 import {createScene} from './scene.mjs';
 import {createState,step,resetPosition,GATES,LOOP,clamp,heightAt,missionGateCount} from './physics.mjs';
 import {makeResearchState,stepResearch,RESEARCH_STAGES,setPrecision,makeDynamicsState} from './research.mjs';
-import {createSuspension,suspensionStep,SUSPENSION,CHASSIS_SETUPS,setChassisSetup,setChassisAdjustment,tuningParameters} from './suspension.mjs';
+import {createSuspension,suspensionStep,SUSPENSION,CHASSIS_SETUPS,setChassisSetup,setChassisAdjustment,tuningParameters} from './suspension.mjs?v=3.0.0';
 import {makeVehicleDynamics} from './vehicle.mjs';
+import {createOrbitState,orbitDrag,orbitPan,orbitZoom,orbitPose,resetOrbit} from './orbit.mjs?v=3.0.0';
 
 const $=id=>document.getElementById(id);
 let world;
@@ -13,6 +14,9 @@ function initialize(w){
  const {T,renderer,scene,camera,car,gates,gateGroup,shadow,sun}=w;
  let state=makeResearchState(),selectedMode='research',phase='menu',cameraMode=0,rollInput=0,countdown=3,calloutTime=0,elapsed=0,last=performance.now(),accumulator=0,previousModalPhase='menu';
  const keys=new Set(),camTarget=new T.Vector3(),camDesired=new T.Vector3(),lookDesired=new T.Vector3(),temp=new T.Vector3(),velocity=new T.Vector3();
+ const orbit=createOrbitState();let orbitPointer=null;
+ function selectCamera(mode){cameraMode=mode;$('app').dataset.camera=mode===3?'orbit':'standard'; if(mode===3){resetOrbit(orbit,state.yaw||0);if(innerWidth<=760){$('app').dataset.telemetry='closed';$('telemetryToggle').setAttribute('aria-expanded','false');$('telemetryToggle').textContent='SHOW SYSTEMS';}}$('orbitButton').setAttribute('aria-pressed',String(mode===3));$('orbitButton').textContent=mode===3?'EXIT ORBIT':'ORBIT CAM';if(phase!=='menu'){positionCamera(.016,true);updateHud();}}
+
  const modeTitles={dynamics:'CHASSIS DYNAMICS / DAMPER LAB',research:'X-FLIGHT CERTIFICATION',trial:'FLIGHT TRIAL',stunt:'STUNT RUN',launch:'LAUNCH SPRINT',free:'FREE ROAM'};
  const ghostKey=m=>'roadster-flight-ghost-v2-'+m;
  const isResearchMode=m=>m==='research'||m==='dynamics';
@@ -42,7 +46,7 @@ function initialize(w){
    closeDialogs();clearKeys();benchmarkHold=false;state=selectedMode==='research'?makeResearchState():selectedMode==='dynamics'?makeDynamicsState():createState(selectedMode);suspension=createSuspension();setChassisSetup(suspension,selectedSetup);if(selectedMode==='dynamics')state.drivetrain=makeVehicleDynamics();recording=[];recordTimer=0;ghostTrack=[];flightLog=[];trace=[];logTimer=0;replayElapsed=0;replayPlaying=false;
    $('replayPanel').classList.add('hidden');$('researchPanel').classList.toggle('hidden',!isResearchMode(state.mode));$('app').dataset.mode=state.mode;w.setResearchPhase(isResearchMode(state.mode),state.stage||0);
    try{ghostTrack=JSON.parse(localStorage.getItem(ghostKey(state.mode))||'[]');if(!Array.isArray(ghostTrack))ghostTrack=[];}catch{ghostTrack=[];}
-   w.setGhostPose(null);w.resetSkids();setPhase('countdown');countdown=3;accumulator=0;cameraMode=0;
+   w.setGhostPose(null);w.resetSkids();setPhase('countdown');countdown=3;accumulator=0;cameraMode=0;$('app').dataset.camera='standard';resetOrbit(orbit,state.yaw||0);$('orbitButton').setAttribute('aria-pressed','false');$('orbitButton').textContent='ORBIT CAM';
    $('menu').classList.add('hidden');$('hud').classList.remove('hidden');$('pauseButton').classList.remove('hidden');$('app').classList.add('playing');$('countdown').classList.remove('hidden');$('countdown').textContent='3';$('callout').classList.remove('show');calloutTime=0;
    updateTuningUI();$('modeName').textContent=modeTitles[state.mode];$('stuntObjectives').classList.toggle('hidden',state.mode!=='stunt');$('missionProgress').classList.toggle('hidden',!['trial','launch'].includes(state.mode));$('targetCompass').classList.toggle('hidden',!['trial','launch'].includes(state.mode));
    $('bestLabel').textContent=state.mode==='dynamics'?'CHASSIS / LIVE':['trial','launch'].includes(state.mode)?'BEST TIME':'BEST SCORE';$('best').textContent=['trial','launch'].includes(state.mode)?(records[state.mode]?formatTime(records[state.mode]):'—'):(records[state.mode]||'—');
@@ -86,7 +90,7 @@ function initialize(w){
    $('time').textContent=formatTime(state.mode==='stunt'?Math.max(0,90-state.time):state.time);$('score').textContent=String(state.score).padStart(5,'0');$('speed').textContent=Math.round(Math.abs(state.speed)*2.23694);$('altitude').textContent=state.y.toFixed(1);$('fuelText').textContent=state.mode==='free'?'∞':`${Math.round(state.air)}%`;$('fuelBar').style.width=state.air+'%';$('fuelBar').style.background=state.air<20?'#ff927a':'#c4a7ff';
    $('fuelHint').textContent=state.mode==='free'?'Unlimited cold-gas supply':state.air<15?'Low air · land to recharge':state.grounded?'Ground compressor active':'Gates also refill the tank';
    $('vehicleState').textContent=isResearchMode(state.mode)?(state.grounded?'WEIGHT ON WHEELS':state.precision?'HOVER CONTROLLER ACTIVE':state.lifting?'THRUST VECTOR ENGAGED':'BALLISTIC FLIGHT'):state.loopAngle!==null?'SUCTION LOCKED':state.boosting?'MAIN THRUSTERS ACTIVE':state.grounded?'GROUND CONTACT':state.lifting?'LIFT THRUSTERS ACTIVE':'AIRBORNE';
-   $('suctionState').textContent=state.suction?'ON':'OFF';$('cameraName').textContent=['CHASE CAM','HOOD CAM','WIDE CAM'][cameraMode];
+   $('suctionState').textContent=state.suction?'ON':'OFF';$('cameraName').textContent=['CHASE CAM','HOOD CAM','WIDE CAM','FREE ORBIT'][cameraMode];
    speedTicks.forEach((t,i)=>t.classList.toggle('lit',i<Math.abs(state.speed)/91*22));
    if(isResearchMode(state.mode)){
      const target=state.mode==='dynamics'?{name:'DAMPER / SURFACE LAB',detail:'Explore the test strip. Steer, brake and study load transfer, wet grip, tire slip and suspension travel.'}:RESEARCH_STAGES[Math.min(state.stage,4)];
@@ -254,10 +258,11 @@ function initialize(w){
        spring.scale.set(1,1,Math.max(.65,1-travel*.8));
      });
      const sy=Math.sin(state.yaw),cy=Math.cos(state.yaw);
-     if(cameraMode===1&&state.loopAngle===null){camDesired.set(state.x-sy*1.5,y+1.5,state.z-cy*1.5);lookDesired.set(state.x-sy*30,y+1.2,state.z-cy*30);}
+     if(cameraMode===3){const pose=orbitPose(orbit,{x:state.x,y:y+1.05,z:state.z});camDesired.set(pose.position.x,Math.max(pose.position.y,heightAt(pose.position.x,pose.position.z)+.7),pose.position.z);lookDesired.set(pose.target.x,pose.target.y,pose.target.z);}
+     else if(cameraMode===1&&state.loopAngle===null){camDesired.set(state.x-sy*1.5,y+1.5,state.z-cy*1.5);lookDesired.set(state.x-sy*30,y+1.2,state.z-cy*30);}
      else if(state.loopAngle!==null){camDesired.set(LOOP.x+38,20,LOOP.z+32);lookDesired.set(state.x,state.y+1,state.z);}
      else{const distance=cameraMode===2?21:12;camDesired.set(state.x+sy*distance,y+(cameraMode===2?9:4.9),state.z+cy*distance);lookDesired.set(state.x-sy*6,y+1.4,state.z-cy*6);}
-     camera.fov+=(clamp(54+Math.abs(state.speed)*.16+(state.boosting?5:0),54,72)-camera.fov)*(1-Math.exp(-dt*2));
+     camera.fov+=((cameraMode===3?55:clamp(54+Math.abs(state.speed)*.16+(state.boosting?5:0),54,72))-camera.fov)*(1-Math.exp(-dt*2));
    }
    if(snap){camera.position.copy(camDesired);camTarget.copy(lookDesired);}else{const blend=1-Math.exp(-dt*(phase==='menu'?1.7:7));camera.position.lerp(camDesired,blend);camTarget.lerp(lookDesired,blend);}
    camera.lookAt(camTarget);camera.updateProjectionMatrix();
@@ -317,7 +322,31 @@ function initialize(w){
    $('telemetryToggle').setAttribute('aria-expanded',String(!opened));
    $('telemetryToggle').textContent=opened?'SHOW SYSTEMS':'HIDE SYSTEMS';
  });
- const gameKeys=new Set(['KeyK','KeyB','KeyY','KeyZ','KeyG','KeyJ','KeyL','KeyT','KeyH','KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','ShiftRight','KeyQ','KeyE','KeyF','KeyC','KeyR']);
+
+ // Pointer-based free orbit. The canvas is the interaction surface; all HUD controls
+ // remain clickable and do not drag the camera. Left-drag rotates, right-drag pans.
+ $('orbitButton').addEventListener('click',()=>{if(phase==='running'||phase==='replay'||phase==='countdown')selectCamera(cameraMode===3?0:3);});
+ renderer.domElement.addEventListener('contextmenu',e=>{if(cameraMode===3)e.preventDefault();});
+ renderer.domElement.addEventListener('pointerdown',e=>{
+   if(cameraMode!==3||!['running','replay','countdown'].includes(phase)||(!e.isPrimary&&e.pointerType==='touch'))return;
+   if(e.button!==0&&e.button!==2)return;
+   orbitPointer={id:e.pointerId,x:e.clientX,y:e.clientY,pan:e.button===2||e.shiftKey};
+   renderer.domElement.setPointerCapture?.(e.pointerId);e.preventDefault();
+ });
+ renderer.domElement.addEventListener('pointermove',e=>{
+   if(!orbitPointer||orbitPointer.id!==e.pointerId||cameraMode!==3)return;
+   const dx=e.clientX-orbitPointer.x,dy=e.clientY-orbitPointer.y;
+   orbitPointer.x=e.clientX;orbitPointer.y=e.clientY;
+   if(orbitPointer.pan)orbitPan(orbit,dx,dy);else orbitDrag(orbit,dx,dy);
+   positionCamera(.016,true);e.preventDefault();
+ });
+ function releaseOrbitPointer(e){if(orbitPointer?.id===e.pointerId){orbitPointer=null;try{renderer.domElement.releasePointerCapture(e.pointerId);}catch{}}}
+ renderer.domElement.addEventListener('pointerup',releaseOrbitPointer);
+ renderer.domElement.addEventListener('pointercancel',releaseOrbitPointer);
+ renderer.domElement.addEventListener('lostpointercapture',releaseOrbitPointer);
+ renderer.domElement.addEventListener('wheel',e=>{if(cameraMode!==3||!['running','replay','countdown'].includes(phase))return;orbitZoom(orbit,e.deltaY);positionCamera(.016,true);e.preventDefault();},{passive:false});
+ renderer.domElement.addEventListener('dblclick',e=>{if(cameraMode!==3)return;resetOrbit(orbit,state.yaw||0);positionCamera(.016,true);e.preventDefault();});
+ const gameKeys=new Set(['KeyK','KeyB','KeyY','KeyZ','KeyG','KeyJ','KeyL','KeyT','KeyH','KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','ShiftRight','KeyQ','KeyE','KeyF','KeyC','KeyO','KeyR']);
  window.addEventListener('keydown',e=>{
    if(e.code==='KeyM'&&!e.repeat){toggleSound();return;}
    if(e.code==='KeyT'&&!e.repeat){cycleEnvironment();return;}
@@ -326,7 +355,7 @@ function initialize(w){
    if(e.code==='Escape'||e.code==='KeyP'){if(phase==='paused'){e.preventDefault();resume();}else if(phase==='running'||phase==='countdown'){e.preventDefault();pause();}return;}
    if(phase!=='running'&&phase!=='countdown')return;
    if(gameKeys.has(e.code))e.preventDefault();keys.add(e.code);
-   if(!e.repeat){if(e.code==='KeyB'&&state.mode==='dynamics'){const order=['comfort','balanced','track'];changeSetup(order[(order.indexOf(selectedSetup)+1)%order.length]);return;}if(e.code==='KeyY'&&state.mode==='dynamics'){toggleSurface();return;}if(e.code==='KeyK'&&state.mode==='dynamics'){toggleTraction();return;}if(e.code==='KeyZ'){togglePrecision();return;}if(e.code==='KeyG'){toggleAssist();return;}if(e.code==='KeyQ')rollInput=1;if(e.code==='KeyE')rollInput=-1;if(e.code==='KeyC'){cameraMode=(cameraMode+1)%3;positionCamera(1,true);}if(e.code==='KeyF'){state.suction=!state.suction;displayCallout(state.suction?'SUCTION ENABLED':'SUCTION OFF',state.suction?'WEST LOOP READY':'FREE ROLLING',1.3);}if(e.code==='KeyR'){if(isResearchMode(state.mode)){start();return;}resetPosition(state,phase==='running');positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);}}
+   if(!e.repeat){if(e.code==='KeyB'&&state.mode==='dynamics'){const order=['comfort','balanced','track'];changeSetup(order[(order.indexOf(selectedSetup)+1)%order.length]);return;}if(e.code==='KeyY'&&state.mode==='dynamics'){toggleSurface();return;}if(e.code==='KeyK'&&state.mode==='dynamics'){toggleTraction();return;}if(e.code==='KeyZ'){togglePrecision();return;}if(e.code==='KeyG'){toggleAssist();return;}if(e.code==='KeyQ')rollInput=1;if(e.code==='KeyE')rollInput=-1;if(e.code==='KeyC'){selectCamera((cameraMode+1)%4);}if(e.code==='KeyO'){selectCamera(cameraMode===3?0:3);}if(e.code==='KeyF'){state.suction=!state.suction;displayCallout(state.suction?'SUCTION ENABLED':'SUCTION OFF',state.suction?'WEST LOOP READY':'FREE ROLLING',1.3);}if(e.code==='KeyR'){if(isResearchMode(state.mode)){start();return;}resetPosition(state,phase==='running');positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);}}
  });
  window.addEventListener('keyup',e=>keys.delete(e.code));
  window.addEventListener('blur',()=>{clearKeys();pause();});

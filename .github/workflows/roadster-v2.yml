@@ -22,6 +22,7 @@ jobs:
           node --check game/research.mjs
           node --check game/suspension.mjs
           node --check game/vehicle.mjs
+          node --check game/orbit.mjs
           node --test tests/*.test.mjs
       - name: Verify self-contained release assets
         run: |
@@ -30,6 +31,9 @@ jobs:
           test -s game/research.mjs
           test -s game/suspension.mjs
           test -s game/vehicle.mjs
+          test -s game/orbit.mjs
           test -s artifacts/roadster-v2-deploy.zip
-          grep -q 'Roadster / Experimental Flight V2.9' game/index.html
+          grep -q 'Roadster / Experimental Flight V3.0' game/index.html
           test -s tests/driveline-v29.test.mjs
+          test -s tests/orbit-v30.test.mjs
+          test -s tests/damper-v30.test.mjs

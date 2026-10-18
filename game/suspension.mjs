@@ -65,7 +65,7 @@ export function createSuspension(){return {
   heave:0,heaveVelocity:0,pitch:0,pitchVelocity:0,roll:0,rollVelocity:0,
   wheelTravel:[0,0,0,0], compression:[0,0,0,0], normalForces:[0,0,0,0],
   contact:[true,true,true,true], tireLoads:[0,0,0,0],
-  groundHeights:[0,0,0,0], grip:1, contactCount:4,
+  groundHeights:[0,0,0,0], roadRiseSpeed:[0,0,0,0], previousWheelRoad:[0,0,0,0], grip:1, contactCount:4,
   forceTotal:0, maxCompression:0, wheelSpin:[0,0,0,0],
   lastX:0,lastZ:0,verticalAccel:0,slip:0,
   tune:createChassisTune(),testTime:0,accelG2:0,rideRmsG:0,
@@ -88,14 +88,24 @@ export function suspensionStep(a,vehicle,dt, options={}){
     const h=height(wx,wz);
     const cornerHeight=y+a.heave+a.roll*lx-a.pitch*lz;
     const cornerVelocity=a.heaveVelocity+a.rollVelocity*lx-a.pitchVelocity*lz;
+    // Relative contact velocity: a fixed bump enters the damper as the car rolls
+    // over it. Filtering prevents discontinuities in discretized road surfaces.
+    const rawSurfaceSpeed=clamp((h-a.previousWheelRoad[i])/dt,-8,8);
+    const surfaceSpeed=a.roadRiseSpeed[i]+(rawSurfaceSpeed-a.roadRiseSpeed[i])*(1-Math.exp(-dt*12));
+    a.roadRiseSpeed[i]=surfaceSpeed;
+    a.previousWheelRoad[i]=h;
+    const relativeVelocity=cornerVelocity-surfaceSpeed*.28;
     // Deflection above the nominal loaded wheel location; positive compression
     // drives the tire toward the road; negative compression allows droop.
     const raw=tune.restCompression-(cornerHeight-h);
     const compression=clamp(raw,0,SUSPENSION.maxCompression);
     const bottomOut=Math.max(0,raw-SUSPENSION.maxCompression);
     // Damping acts against *relative* motion rather than speed alone.
-    const damper=cornerVelocity<0?tune.damperBump:tune.damperRebound;
-    let f=Math.max(0,tune.springRate*compression-damper*cornerVelocity+SUSPENSION.bumpStopRate*bottomOut);
+    const damper=relativeVelocity<0?tune.damperBump:tune.damperRebound;
+    // Rising-rate end travel avoids an abrupt impulse at full compression.
+    const endTravel=Math.max(0,compression-SUSPENSION.maxCompression*.72);
+    const progressive=(tune.springRate*3/SUSPENSION.maxCompression)*endTravel*endTravel;
+    let f=Math.max(0,tune.springRate*compression+progressive-damper*relativeVelocity+SUSPENSION.bumpStopRate*bottomOut);
     if(flight||raw < -SUSPENSION.maxDroop)f=0;
     force[i]=f;contact[i]=f>1;
     if(contact[i])contactCount++;

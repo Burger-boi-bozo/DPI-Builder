@@ -178,3 +178,22 @@
 #tractionToggle[aria-pressed="false"]{background:#50292e;border-color:#e8988a88;color:#fff0e6}
 #driveGear{color:#e4ff95!important;font-size:21px}
 #driveTorque,#driveWear{font-variant-numeric:tabular-nums}
+
+/* V3.0 — orbit viewport and engineered uncluttered overlays. */
+.orbit-toggle{display:none!important;border-color:#8ddfff70!important;background:#143846bf!important;color:#e6fbff!important}
+.playing .orbit-toggle{display:inline-flex!important;align-items:center;justify-content:center}
+.orbit-toggle[aria-pressed="true"]{background:#c4f2e7!important;color:#12252a!important;border-color:#c4f2e7!important}
+.orbit-hint{display:none;position:absolute;z-index:8;left:50%;bottom:56px;transform:translateX(-50%);border:1px solid #b4f0ee66;border-radius:9px;background:#0b1e2add;color:#dffcff;padding:9px 14px;font-size:10px;letter-spacing:.07em;white-space:nowrap;text-align:center;backdrop-filter:blur(12px);pointer-events:none}
+.orbit-hint small{font-size:9px;color:#aac9d2;margin-left:12px;letter-spacing:.01em}
+#app[data-camera="orbit"] .orbit-hint{display:block}
+#app[data-telemetry="open"] .map-wrap{opacity:.25;pointer-events:none}
+#app[data-mode="dynamics"] .mission-block{width:min(405px,33vw);padding:12px 15px;z-index:6}
+#app[data-mode="dynamics"] .mission-block h2{font-size:clamp(17px,1.55vw,24px);line-height:1.2}
+#app[data-mode="dynamics"] .mission-block p{font-size:11px;line-height:1.45;max-width:34ch}
+#app[data-mode="dynamics"][data-telemetry="open"] .mission-block{opacity:.42}
+#app[data-mode="dynamics"] .research-panel .vehicle-diagnostics{background:#0a2230}
+@media(max-width:1100px){.orbit-toggle{min-width:74px!important;font-size:8px!important;padding:0 8px!important}.orbit-hint{bottom:65px;white-space:normal;width:min(90vw,430px)}.orbit-hint small{display:block;margin:4px 0 0}}
+@media(max-width:760px){.orbit-toggle{min-width:54px!important;font-size:8px!important;padding:0 7px!important}.orbit-hint{bottom:122px;left:50%;width:min(92vw,360px);font-size:8px}.orbit-hint small{font-size:8px}#app[data-telemetry="open"] .mission-block{visibility:hidden}}
+#world canvas{touch-action:none;cursor:default}
+#app[data-camera="orbit"] #world canvas{cursor:grab}
+#app[data-camera="orbit"] #world canvas:active{cursor:grabbing}
