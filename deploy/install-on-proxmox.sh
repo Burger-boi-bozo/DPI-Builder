@@ -20,7 +20,7 @@ with ZipFile(sys.argv[1]) as archive:
             archive.extract(item, '.')
 PYZIP
 node --test tests/*.test.mjs
-for f in game/game.mjs game/scene.mjs game/physics.mjs game/research.mjs game/suspension.mjs game/vehicle.mjs game/orbit.mjs; do node --check "$f"; done
+for f in game/game.mjs game/scene.mjs game/physics.mjs game/research.mjs game/suspension.mjs game/vehicle.mjs game/orbit.mjs game/engineering.mjs; do node --check "$f"; done
 STAGE=$(mktemp -d "$ROOT/.v2-release-XXXXXXXX")
 BACKUP=""
 SWAPPED=0
@@ -36,8 +36,8 @@ cleanup() {
 }
 trap cleanup EXIT
 python3 -m zipfile -e "$ARCHIVE" "$STAGE"
-[ -s "$STAGE/game/index.html" ] && [ -s "$STAGE/game/research.mjs" ] && [ -s "$STAGE/game/suspension.mjs" ] && [ -s "$STAGE/game/vehicle.mjs" ] && [ -s "$STAGE/game/three.module.min.js" ]
-grep -q 'Roadster / Experimental Flight V3.0' "$STAGE/game/index.html"
+[ -s "$STAGE/game/index.html" ] && [ -s "$STAGE/game/research.mjs" ] && [ -s "$STAGE/game/suspension.mjs" ] && [ -s "$STAGE/game/vehicle.mjs" ] && [ -s "$STAGE/game/engineering.mjs" ] && [ -s "$STAGE/game/three.module.min.js" ]
+grep -q 'Roadster / Experimental Flight V3.1' "$STAGE/game/index.html"
 mkdir -p "$ROOT/releases"
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 if [ -d "$ROOT/dist" ]; then BACKUP="$ROOT/releases/previous-$STAMP";mv "$ROOT/dist" "$BACKUP";fi
@@ -48,9 +48,10 @@ chown -R root:root "$ROOT/dist"
 if ! systemctl is-active --quiet roadster-flight.service; then systemctl restart roadster-flight.service;fi
 sleep 1
 curl -fsSI --max-time 8 http://127.0.0.1:18767/ >/dev/null
-curl -fsS --max-time 8 http://127.0.0.1:18767/ | grep -q 'Roadster / Experimental Flight V3.0'
+curl -fsS --max-time 8 http://127.0.0.1:18767/ | grep -q 'Roadster / Experimental Flight V3.1'
 curl -fsSI --max-time 8 http://127.0.0.1:18767/research.mjs >/dev/null
 curl -fsSI --max-time 8 http://127.0.0.1:18767/suspension.mjs >/dev/null
 curl -fsSI --max-time 8 http://127.0.0.1:18767/vehicle.mjs >/dev/null
+curl -fsSI --max-time 8 http://127.0.0.1:18767/engineering.mjs >/dev/null
 SWAPPED=0
-printf 'V3.0 deployed to %s/dist; previous release %s\n' "$ROOT" "$BACKUP"
+printf 'V3.1 deployed to %s/dist; previous release %s\n' "$ROOT" "$BACKUP"

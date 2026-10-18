@@ -1,4 +1,4 @@
-# Roadster X-Flight — Experimental Flight Lab V3.0
+# Roadster X-Flight — Experimental Flight Lab V3.1
 
 A self-hosted, original experimental-flight concept built on the recovered Roadster Flight Lab V1. This is **not** a physics-validated Tesla Roadster representation. Thruster characteristics, mass, aerodynamics, structural/thermal limits, and safety systems are hypothetical parameters designed for a playable R&D simulator. Not affiliated with Tesla or SpaceX.
 
@@ -40,7 +40,7 @@ Serve `game/` as a static directory. For example: `python3 -m http.server 18767 
 
 ## Test and deploy
 
-`node --test tests/*.test.mjs` runs 73 deterministic checks across V1 heritage physics, flight certification, suspension, four-contact-patch tire dynamics, collisions, and CPU-level 3D model integrity. `node --check game/*.mjs` verifies syntax. UI logic is additionally tested using a mocked renderer to exercise flight startup, telemetry, hover controller and checkpoint reset. **Full visual/WebGL playtesting on a GPU-enabled browser is still required.** The working sandbox blocks full WebGL; automated browser UI interactions use a renderer stub, while all 3D meshes receive direct CPU-level geometry integrity tests. GPU-rendered QA remains outstanding.
+`node --test tests/*.test.mjs` runs 83 deterministic checks across V1 heritage physics, flight certification, suspension, four-contact-patch tire dynamics, collisions, and CPU-level 3D model integrity. `node --check game/*.mjs` verifies syntax. UI logic is additionally tested using a mocked renderer to exercise flight startup, telemetry, hover controller and checkpoint reset. **Full visual/WebGL playtesting on a GPU-enabled browser is still required.** The working sandbox blocks full WebGL; automated browser UI interactions use a renderer stub, while all 3D meshes receive direct CPU-level geometry integrity tests. GPU-rendered QA remains outstanding.
 
 Production: Proxmox `pve` at `/opt/roadster-flight`, service `roadster-flight.service`, loopback port `18767`, Cloudflare `https://fly.dpifiles.org`. Run `bash deploy/install-on-proxmox.sh` as root from a current `roadster-flight-v2` checkout to test, back up the previous version and swap in the self-contained archive. Source branch and release archive remain synchronized.
 
@@ -89,3 +89,14 @@ New ground-vehicle dynamics include tire-temperature and load-sensitive grip, a 
 - Damper relative velocity now samples and filters approaching road elevation per wheel so bump arrival affects the compression damper, not just the body. Progressive spring rate near bump stops. Existing load-transfer behavior remains verified through full regression testing.
 - 73 automated checks including 8 new suspension/orbit tests; desktop/mobile browser interactions check orbit rotation, wheel zoom, reset, panel bounds, and JavaScript errors. Browser QA uses a mocked renderer because GPU WebGL support is unavailable on the test environment.
 - `ROADMAP_100.md` contains one hundred specific prioritized improvements. Most remain proposed, not shipped.
+
+
+## V3.1 — Engineering specification, first delivery (not 100/100)
+
+- Replaces instantaneous suspension wheel contacts with four **independent vertical unsprung hub states**, including finite hub mass, tire radial rate, tire damping, dynamic wheel load and contact loss. Sprung-body heave/pitch/roll are still approximate; a six-degree-of-freedom coupled multibody model is **not** complete.
+- Adds a projected unequal-length double-wishbone hardpoint solver. Each wheel reports camber, bump-steer/toe, projected track change, caster and mechanical trail. This is a deliberately approximate planar linkage, not CAD-verified Roadster geometry.
+- Adds separate low/high-speed compression/rebound damping regimes, nonlinear rising-rate spring and adjustable bump-stop stiffness; user can tune bump-stop rate in Suspension Lab. Chassis and unsprung motion are integrated at 120 Hz.
+- The ground tire model now uses a capped Pacejka-style lateral slip force, speed-sensitive slip relaxation, compound options (Touring / Sport / Track; press **I** or use the Systems control), carcass temperature, thermal inflation and pressure-dependent stiffness. Surface/carcass thermal coupling and high-water-depth hydroplaning are conceptual and not experimentally calibrated.
+- The Engineering panel shows wheel camber, mean hub displacement, tire pressure and tire carcass temperature. Wheel carriers articulate with toe and camber. `game/engineering.mjs` accepts external distance/height traces as an interpolation function; no measured road traces are bundled or claimed.
+- Adds 10 new numerical tests for independent hub states, four tire load support, bump response, airborne release, camber gain, nonlinear wheel response, tire force saturation, tire relaxation, tire pressure and deterministic trace interpolation. Total **83 automated checks**, plus Chromium renderer-stub UI tests.
+- `ENGINEERING_SPEC_100.md` tracks the user's 100-item engineering request. Most specifications remain *pending or partial*; this release does not claim OEM fidelity, licensed concept meshes, true WebGL GPU validation or all 100 completed.

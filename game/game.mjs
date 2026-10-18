@@ -139,6 +139,11 @@ function initialize(w){
       $('driveSafety').textContent=d.absActive?'ABS ACTIVE':d.tcsActive?'TORQUE LIMITED':d.escActive?'ESC CORRECTING':d.contactImpacts?'FRAME IMPACT '+d.contactImpacts:'FULL TRACTION';
       $('driveGear').textContent=d.gear;
       $('driveWear').textContent=(100*d.tireWear.reduce((a,b)=>a+b,0)/4).toFixed(1)+'%';
+      $('driveCamber').textContent=(suspension.wheelCamber.reduce((a,b)=>a+Math.abs(b),0)/4*180/Math.PI).toFixed(2)+'°';
+      $('drivePressure').textContent=(d.tirePressure.reduce((a,b)=>a+b,0)/4).toFixed(0)+' kPa';
+      $('driveCarcass').textContent=(d.carcassTemperature.reduce((a,b)=>a+b,0)/4).toFixed(0)+'°C';
+      $('driveHub').textContent=(1000*suspension.hubHeight.reduce((a,b)=>a+b,0)/4).toFixed(0)+' mm';
+      $('compoundToggle').textContent='I · '+d.tireCompound.toUpperCase()+' TIRES';
       $('driveTorque').textContent=Math.round(100*d.torqueLimit)+'%';
       $('tractionToggle').textContent='K · TRACTION CONTROL '+(d.tcsEnabled?'ON':'OFF');
       $('tractionToggle').setAttribute('aria-pressed',String(d.tcsEnabled));
@@ -178,11 +183,14 @@ function initialize(w){
    const d=state.drivetrain;d.tcsEnabled=!d.tcsEnabled;
    displayCallout(d.tcsEnabled?'TRACTION CONTROL ENABLED':'TRACTION CONTROL DISABLED',d.tcsEnabled?'MOTOR TORQUE IS MANAGED WHEN TIRES SLIP':'RAW DRIVER TORQUE / WATCH WHEEL SLIP',1.8);
  }
+ function cycleCompound(){if(state.mode!=='dynamics'||!state.drivetrain)return;const order=['touring','sport','track'];const d=state.drivetrain;d.tireCompound=order[(order.indexOf(d.tireCompound)+1)%order.length];displayCallout(d.tireCompound.toUpperCase()+' TIRES','CONTACT PATCH / THERMAL COMPOUND CHANGED',1.5);}
  function toggleSurface(){if(state.mode!=='dynamics')return;state.roadMu=state.roadMu<.7?1.06:.54;displayCallout(state.roadMu<.7?'WET TEST SURFACE':'DRY TEST SURFACE',state.roadMu<.7?'LESS GRIP / LONGER BRAKING DISTANCE':'FULL TIRE ADHESION',1.6);}
  function updateTuningUI(){
    const t=tuningParameters(suspension.tune);
    $('springTuning').value=String(Math.round(suspension.tune.springScale*100));
    $('damperTuning').value=String(Math.round(suspension.tune.damperScale*100));
+   $('bumpStopTuning').value=String(Math.round(suspension.tune.bumpStopScale*100));
+   $('bumpStopLabel').textContent=Math.round(suspension.tune.bumpStopScale*100)+'%';
    $('springRateLabel').textContent=(t.springRate/1000).toFixed(1)+' kN/m';
    $('damperRateLabel').textContent=Math.round(suspension.tune.damperScale*100)+'%';
    document.querySelectorAll('[data-setup]').forEach(button=>{
@@ -253,7 +261,8 @@ function initialize(w){
      if(car.userData.springs)car.userData.springs.forEach(({carrier,strut,piston,spring},i)=>{
        const travel=suspension.wheelTravel[i];
        carrier.position.y=travel;
-       carrier.rotation.y=state.drivetrain&&i<2?state.drivetrain.steerAngle:0;
+       carrier.rotation.y=(state.drivetrain&&i<2?state.drivetrain.steerAngle:0)+(suspension.wheelToe[i]||0);
+       carrier.rotation.z=suspension.wheelCamber[i]||0;
        piston.position.y=-.35+travel*.35;spring.position.y=-.16+travel*.18;
        spring.scale.set(1,1,Math.max(.65,1-travel*.8));
      });
@@ -346,7 +355,7 @@ function initialize(w){
  renderer.domElement.addEventListener('lostpointercapture',releaseOrbitPointer);
  renderer.domElement.addEventListener('wheel',e=>{if(cameraMode!==3||!['running','replay','countdown'].includes(phase))return;orbitZoom(orbit,e.deltaY);positionCamera(.016,true);e.preventDefault();},{passive:false});
  renderer.domElement.addEventListener('dblclick',e=>{if(cameraMode!==3)return;resetOrbit(orbit,state.yaw||0);positionCamera(.016,true);e.preventDefault();});
- const gameKeys=new Set(['KeyK','KeyB','KeyY','KeyZ','KeyG','KeyJ','KeyL','KeyT','KeyH','KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','ShiftRight','KeyQ','KeyE','KeyF','KeyC','KeyO','KeyR']);
+ const gameKeys=new Set(['KeyI','KeyK','KeyB','KeyY','KeyZ','KeyG','KeyJ','KeyL','KeyT','KeyH','KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','ShiftRight','KeyQ','KeyE','KeyF','KeyC','KeyO','KeyR']);
  window.addEventListener('keydown',e=>{
    if(e.code==='KeyM'&&!e.repeat){toggleSound();return;}
    if(e.code==='KeyT'&&!e.repeat){cycleEnvironment();return;}
@@ -355,7 +364,7 @@ function initialize(w){
    if(e.code==='Escape'||e.code==='KeyP'){if(phase==='paused'){e.preventDefault();resume();}else if(phase==='running'||phase==='countdown'){e.preventDefault();pause();}return;}
    if(phase!=='running'&&phase!=='countdown')return;
    if(gameKeys.has(e.code))e.preventDefault();keys.add(e.code);
-   if(!e.repeat){if(e.code==='KeyB'&&state.mode==='dynamics'){const order=['comfort','balanced','track'];changeSetup(order[(order.indexOf(selectedSetup)+1)%order.length]);return;}if(e.code==='KeyY'&&state.mode==='dynamics'){toggleSurface();return;}if(e.code==='KeyK'&&state.mode==='dynamics'){toggleTraction();return;}if(e.code==='KeyZ'){togglePrecision();return;}if(e.code==='KeyG'){toggleAssist();return;}if(e.code==='KeyQ')rollInput=1;if(e.code==='KeyE')rollInput=-1;if(e.code==='KeyC'){selectCamera((cameraMode+1)%4);}if(e.code==='KeyO'){selectCamera(cameraMode===3?0:3);}if(e.code==='KeyF'){state.suction=!state.suction;displayCallout(state.suction?'SUCTION ENABLED':'SUCTION OFF',state.suction?'WEST LOOP READY':'FREE ROLLING',1.3);}if(e.code==='KeyR'){if(isResearchMode(state.mode)){start();return;}resetPosition(state,phase==='running');positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);}}
+   if(!e.repeat){if(e.code==='KeyI'&&state.mode==='dynamics'){cycleCompound();return;}if(e.code==='KeyB'&&state.mode==='dynamics'){const order=['comfort','balanced','track'];changeSetup(order[(order.indexOf(selectedSetup)+1)%order.length]);return;}if(e.code==='KeyY'&&state.mode==='dynamics'){toggleSurface();return;}if(e.code==='KeyK'&&state.mode==='dynamics'){toggleTraction();return;}if(e.code==='KeyZ'){togglePrecision();return;}if(e.code==='KeyG'){toggleAssist();return;}if(e.code==='KeyQ')rollInput=1;if(e.code==='KeyE')rollInput=-1;if(e.code==='KeyC'){selectCamera((cameraMode+1)%4);}if(e.code==='KeyO'){selectCamera(cameraMode===3?0:3);}if(e.code==='KeyF'){state.suction=!state.suction;displayCallout(state.suction?'SUCTION ENABLED':'SUCTION OFF',state.suction?'WEST LOOP READY':'FREE ROLLING',1.3);}if(e.code==='KeyR'){if(isResearchMode(state.mode)){start();return;}resetPosition(state,phase==='running');positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);}}
  });
  window.addEventListener('keyup',e=>keys.delete(e.code));
  window.addEventListener('blur',()=>{clearKeys();pause();});
@@ -368,8 +377,9 @@ function initialize(w){
  document.querySelector('[data-action="reset"]').addEventListener('pointerdown',e=>{e.preventDefault();if(phase!=='running')return;if(isResearchMode(state.mode)){start();return;}resetPosition(state);positionCamera(1,true);displayCallout('CHECKPOINT RESET',state.mode==='trial'?'+3 SECONDS':'READY FOR ANOTHER TRY',1.5);});
  $('surfaceToggle').addEventListener('click',toggleSurface);
  $('tractionToggle').addEventListener('click',toggleTraction);
+ $('compoundToggle').addEventListener('click',cycleCompound);
  document.querySelectorAll('[data-setup]').forEach(button=>button.addEventListener('click',()=>changeSetup(button.dataset.setup)));
- for(const [id,key] of [['springTuning','springScale'],['damperTuning','damperScale']]){
+ for(const [id,key] of [['springTuning','springScale'],['damperTuning','damperScale'],['bumpStopTuning','bumpStopScale']]){
    $(id).addEventListener('input',()=>{if(state.mode!=='dynamics')return;setChassisAdjustment(suspension,key,Number($(id).value)/100);updateTuningUI();});
  }
  $('benchBaseline').addEventListener('click',saveBenchmark);

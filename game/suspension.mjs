@@ -1,6 +1,7 @@
 // Four-corner sprung-body model: independent terrain contact, vertical spring/
 // damper force, bump stops, roll bars, chassis heave/pitch/roll and tire grip.
 // The model is intentionally parameterized rather than claiming OEM Roadster data.
+import {wishboneKinematics} from './engineering.mjs';
 const G=9.80665;
 export const SUSPENSION={
   mass:2160, wheelbase:2.93,track:2.16, wheelRadius:.45,
@@ -8,7 +9,7 @@ export const SUSPENSION={
   restCompression:.1376,maxCompression:.29,maxDroop:.17,
   bumpStopRate:150000,rollBar:8600,
   pitchInertia:3280,rollInertia:1380,rideHeight:0.0,
-  tireMu:1.08
+  tireMu:1.08,unsprungMass:47,tireVerticalRate:190000,tireVerticalDamper:1800
 };
 export const CHASSIS_SETUPS=Object.freeze({
   comfort:Object.freeze({label:'COMFORT',springRate:31000,damperBump:3400,damperRebound:3200,rollBar:4300}),
@@ -17,16 +18,16 @@ export const CHASSIS_SETUPS=Object.freeze({
 });
 export function createChassisTune(preset='balanced'){
   const safe=Object.hasOwn(CHASSIS_SETUPS,preset)?preset:'balanced';
-  return {preset:safe,springScale:1,damperScale:1};
+  return {preset:safe,springScale:1,damperScale:1,bumpStopScale:1};
 }
 export function setChassisSetup(a,preset){
   a.tune=createChassisTune(preset);
   return a.tune;
 }
 export function setChassisAdjustment(a,key,value){
-  if(!['springScale','damperScale'].includes(key))return a.tune;
+  if(!['springScale','damperScale','bumpStopScale'].includes(key))return a.tune;
   const val=Number(value);
-  if(Number.isFinite(val))a.tune[key]=clamp(val,.70,1.45);
+  if(Number.isFinite(val))a.tune[key]=clamp(val,key==='bumpStopScale'?.50:.70,key==='bumpStopScale'?1.60:1.45);
   return a.tune;
 }
 export function tuningParameters(tuning){
@@ -35,7 +36,10 @@ export function tuningParameters(tuning){
   const springRate=chosen.springRate*springScale;
   return {...chosen,springRate,damperBump:chosen.damperBump*damperScale,
    damperRebound:chosen.damperRebound*damperScale,
-   restCompression:SUSPENSION.mass*G/(4*springRate)};
+   highSpeedBump:chosen.damperBump*damperScale*.43,highSpeedRebound:chosen.damperRebound*damperScale*.57,
+   bumpStopRate:SUSPENSION.bumpStopRate*(tuning?.bumpStopScale||1),
+   bumpStopEngage:SUSPENSION.maxCompression*.75,
+   springProgression:.14,restCompression:SUSPENSION.mass*G/(4*springRate)};
 }
 const corners=[[-1.08,-1.48],[1.08,-1.48],[-1.08,1.45],[1.08,1.45]];
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -63,6 +67,8 @@ export function surfaceAt(x,z){
 }
 export function createSuspension(){return {
   heave:0,heaveVelocity:0,pitch:0,pitchVelocity:0,roll:0,rollVelocity:0,
+  hubHeight:[0,0,0,0],hubVelocity:[0,0,0,0],tireDeflection:[0,0,0,0],hubAcceleration:[0,0,0,0],
+  wheelCamber:[0,0,0,0],wheelToe:[0,0,0,0],
   wheelTravel:[0,0,0,0], compression:[0,0,0,0], normalForces:[0,0,0,0],
   contact:[true,true,true,true], tireLoads:[0,0,0,0],
   groundHeights:[0,0,0,0], roadRiseSpeed:[0,0,0,0], previousWheelRoad:[0,0,0,0], grip:1, contactCount:4,
@@ -80,52 +86,63 @@ export function suspensionStep(a,vehicle,dt, options={}){
   const tune=tuningParameters(options.tune||a.tune);
   const y=Math.max(0,vehicle.y||0);
   const flight=y>.5||vehicle.loopAngle!=null;
-  let sum=0, pitchTorque=0,rollTorque=0,contactCount=0;
-  const force=[0,0,0,0],travel=[0,0,0,0],contact=[false,false,false,false];
+  let sum=0,pitchTorque=0,rollTorque=0,contactCount=0;
+  const spring=[0,0,0,0],tire=[0,0,0,0],travel=[0,0,0,0],contact=[false,false,false,false];
+  const unsprung=SUSPENSION.unsprungMass;
+  const loadedTireCompression=(mass*G/4+unsprung*G)/SUSPENSION.tireVerticalRate;
   for(let i=0;i<4;i++){
     const [lx,lz]=corners[i];
     const wx=vehicle.x+lx*cy+lz*sy,wz=vehicle.z-lx*sy+lz*cy;
     const h=height(wx,wz);
-    const cornerHeight=y+a.heave+a.roll*lx-a.pitch*lz;
-    const cornerVelocity=a.heaveVelocity+a.rollVelocity*lx-a.pitchVelocity*lz;
-    // Relative contact velocity: a fixed bump enters the damper as the car rolls
-    // over it. Filtering prevents discontinuities in discretized road surfaces.
-    const rawSurfaceSpeed=clamp((h-a.previousWheelRoad[i])/dt,-8,8);
-    const surfaceSpeed=a.roadRiseSpeed[i]+(rawSurfaceSpeed-a.roadRiseSpeed[i])*(1-Math.exp(-dt*12));
-    a.roadRiseSpeed[i]=surfaceSpeed;
-    a.previousWheelRoad[i]=h;
-    const relativeVelocity=cornerVelocity-surfaceSpeed*.28;
-    // Deflection above the nominal loaded wheel location; positive compression
-    // drives the tire toward the road; negative compression allows droop.
-    const raw=tune.restCompression-(cornerHeight-h);
-    const compression=clamp(raw,0,SUSPENSION.maxCompression);
-    const bottomOut=Math.max(0,raw-SUSPENSION.maxCompression);
-    // Damping acts against *relative* motion rather than speed alone.
-    const damper=relativeVelocity<0?tune.damperBump:tune.damperRebound;
-    // Rising-rate end travel avoids an abrupt impulse at full compression.
-    const endTravel=Math.max(0,compression-SUSPENSION.maxCompression*.72);
-    const progressive=(tune.springRate*3/SUSPENSION.maxCompression)*endTravel*endTravel;
-    let f=Math.max(0,tune.springRate*compression+progressive-damper*relativeVelocity+SUSPENSION.bumpStopRate*bottomOut);
-    if(flight||raw < -SUSPENSION.maxDroop)f=0;
-    force[i]=f;contact[i]=f>1;
-    if(contact[i])contactCount++;
-    sum+=f;rollTorque+=lx*f;pitchTorque-=lz*f;
-    a.groundHeights[i]=h;
-    // Wheel center extension is distinct from sprung chassis heave.
-    travel[i]=clamp(-cornerHeight+h,-SUSPENSION.maxDroop,SUSPENSION.maxCompression);
+    const bodyHeight=y+a.heave+a.roll*lx-a.pitch*lz;
+    const bodyVelocity=a.heaveVelocity+a.rollVelocity*lx-a.pitchVelocity*lz;
+    const rise=clamp((h-a.previousWheelRoad[i])/dt,-12,12);
+    const surfaceSpeed=a.roadRiseSpeed[i]+(rise-a.roadRiseSpeed[i])*(1-Math.exp(-dt*25));
+    a.roadRiseSpeed[i]=surfaceSpeed;a.previousWheelRoad[i]=h;a.groundHeights[i]=h;
+    const hub=a.hubHeight[i],hubSpeed=a.hubVelocity[i];
+    const compRaw=tune.restCompression+hub-bodyHeight;
+    const compression=clamp(compRaw,0,SUSPENSION.maxCompression);
+    const damperSpeed=bodyVelocity-hubSpeed;
+    const low=clamp(Math.abs(damperSpeed),0,.22),high=Math.max(0,Math.abs(damperSpeed)-.22);
+    const dForce=(damperSpeed<0?1:-1)*((damperSpeed<0?tune.damperBump:tune.damperRebound)*low+
+      (damperSpeed<0?tune.highSpeedBump:tune.highSpeedRebound)*high);
+    const progression=tune.springRate*tune.springProgression*compression*Math.pow(compression/SUSPENSION.maxCompression,2);
+    const bump=Math.max(0,compRaw-tune.bumpStopEngage);
+    const bumpForce=tune.bumpStopRate*bump*bump/Math.max(.01,SUSPENSION.maxCompression-tune.bumpStopEngage);
+    const suspensionForce=Math.max(0,tune.springRate*compression+progression+dForce+bumpForce);
+    const tireCompression=loadedTireCompression+h-hub;
+    const tireForce=flight?0:Math.max(0,SUSPENSION.tireVerticalRate*tireCompression+SUSPENSION.tireVerticalDamper*(surfaceSpeed-hubSpeed));
+    tire[i]=tireForce;
+    spring[i]=flight?0:suspensionForce;
+    contact[i]=tireForce>1;if(contact[i])contactCount++;
+    a.tireDeflection[i]=Math.max(0,tireCompression);
+    travel[i]=clamp(hub-bodyHeight,-SUSPENSION.maxDroop,SUSPENSION.maxCompression);
+    const kinematics=wishboneKinematics(travel[i],i%2?1:-1);
+    a.wheelCamber[i]=kinematics.camber;a.wheelToe[i]=kinematics.toe;
   }
-  // Cross-axle torsion: opposite left/right deflections resist body roll.
-  // This changes wheel loads; torque sum remains balanced.
-  for(const pair of [[0,1],[2,3]]){
-    const [l,r]=pair;const delta=travel[l]-travel[r];
-    const anti=tune.rollBar*delta;
-    if(force[l]+force[r]>0){
-      const correction=clamp(anti,-force[r],force[l]);
-      force[l]-=correction;force[r]+=correction;
+  // The stabilizer transfers vertical load between left/right wheel stations.
+  // Equal and opposite forces preserve net vertical chassis support.
+  for(const [left,right] of [[0,1],[2,3]]){
+    if(flight)break;
+    const delta=travel[left]-travel[right];
+    const lever=Math.max(.65,1-.15*Math.abs(delta)/SUSPENSION.maxCompression);
+    const anti=tune.rollBar*delta*lever;
+    if(spring[left]+spring[right]>0){
+      const corrected=clamp(anti,-spring[right],spring[left]);
+      spring[left]-=corrected;spring[right]+=corrected;
     }
   }
-  sum=0;rollTorque=0;pitchTorque=0;
-  for(let i=0;i<4;i++){const [lx,lz]=corners[i];sum+=force[i];rollTorque+=lx*force[i];pitchTorque-=lz*force[i];}
+  for(let i=0;i<4;i++){
+    const [lx,lz]=corners[i];
+    const hubAccel=flight?(-a.hubHeight[i]*22-a.hubVelocity[i]*14):
+      (tire[i]-spring[i]-unsprung*G)/unsprung;
+    a.hubAcceleration[i]=clamp(hubAccel,-250,250);
+    a.hubVelocity[i]=clamp(a.hubVelocity[i]+a.hubAcceleration[i]*dt,-15,15);
+    a.hubHeight[i]=clamp(a.hubHeight[i]+a.hubVelocity[i]*dt,-.42,.65);
+    if(a.hubHeight[i]===-.42&&a.hubVelocity[i]<0)a.hubVelocity[i]=0;
+    if(a.hubHeight[i]===.65&&a.hubVelocity[i]>0)a.hubVelocity[i]=0;
+    sum+=spring[i];rollTorque+=lx*spring[i];pitchTorque-=lz*spring[i];
+  }
   const accel=flight?(-a.heave*23-a.heaveVelocity*12):(sum/mass-G);
   a.heaveVelocity=clamp(a.heaveVelocity+accel*dt,-8,8);
   a.heave=clamp(a.heave+a.heaveVelocity*dt,-.22,.5);
@@ -143,8 +160,8 @@ export function suspensionStep(a,vehicle,dt, options={}){
   // A small body-to-ground displacement is not a teleport; tire contact still
   // follows the ground via travel until the suspension reaches its stops.
   a.forceTotal=sum;a.verticalAccel=sum/mass-G;a.contactCount=contactCount;
-  a.wheelTravel=travel;a.contact=contact;a.normalForces=force;
-  a.tireLoads=force.map(f=>f/G);
+  a.wheelTravel=travel;a.contact=contact;a.normalForces=tire;
+  a.tireLoads=tire.map(f=>f/G);
   a.compression=travel.map(t=>clamp(tune.restCompression+t,0,SUSPENSION.maxCompression));
   a.maxCompression=Math.max(...a.compression);
   a.grip=clamp(sum/(mass*G),0,1.35)*(contactCount/4);

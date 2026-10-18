@@ -1,3 +1,4 @@
+import {HARDPOINTS,magicFormulaForce,relaxationStep,tirePressureFromHeat} from './engineering.mjs';
 // Concept AWD EV tire / steering / braking model. Not calibrated to a Tesla.
 // Ground-only: 4 contact patches use the suspension solver's individual loads.
 // SI: m, s, kg, N, rad, J. The flight integrator remains independent.
@@ -23,7 +24,9 @@ export function makeVehicleDynamics(){return {
  yawRate:0,steerAngle:0,steerCommand:0,
  wheelOmega:[0,0,0,0],longitudinalSlip:[0,0,0,0],slipAngles:[0,0,0,0],
  tireForceX:[0,0,0,0],tireForceY:[0,0,0,0],wheelLoads:[0,0,0,0],
- tireTemperature:[27,27,27,27],brakeTemperature:[28,28,28,28],
+ tireTemperature:[27,27,27,27],carcassTemperature:[25,25,25,25],tirePressure:[240,240,240,240],
+ relaxedSlipAngles:[0,0,0,0],tireCompound:'sport',waterDepth:0,batteryTemp:28,
+ brakeTemperature:[28,28,28,28],
  tireWear:[0,0,0,0],tcsEnabled:true,tcsActive:false,torqueLimit:1,gear:"D",shiftHold:0,
  soc:88,regenKw:0,powerKw:0,absActive:false,escActive:false,
  longitudinalAccel:0,lateralAccel:0,velocityForward:0,velocityLateral:0,
@@ -61,18 +64,24 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
  const driveDirection=d.gear==='D'?1:-1;
  // Rack has steering inertia, rack-angle limiting and speed-dependent range.
  const steerLimit=.48/(1+Math.pow(speed/22,1.55));
+ // Mechanical trail and positive caster produce a speed-dependent aligning
+ // tendency when the driver releases the steering command.
+ const selfAlign=steer===0?clamp(1+speed*HARDPOINTS.trail*Math.sin(HARDPOINTS.caster)*13,1,2.7):1;
  const steerTarget=steer*steerLimit;
- d.steerAngle+=clamp(steerTarget-d.steerAngle,-1.55*dt,1.55*dt);
+ d.steerAngle+=clamp(steerTarget-d.steerAngle,-1.55*selfAlign*dt,1.55*selfAlign*dt);
  d.steerCommand=steer;
  const accelPedal=driving?1:0,brakePedal=braking?1:0;
- const powerTaper=clamp(1-speed/(d.gear==='R'?15:96),.06,1);
+ // Torque/speed map and battery derating; this is an illustrative EV motor map.
+ const motorRpm=speed/VEHICLE.wheelRadius*60/(2*Math.PI)*8.8;
+ const powerTaper=clamp(1-Math.pow(motorRpm/(d.gear==='R'?4800:14500),1.4),.08,1);
+ const batteryDerate=clamp(Math.min((d.soc-3)/14,(68-d.batteryTemp)/20,1),.16,1);
  // Per-wheel slip is sampled from the previous 120 Hz step; the next motor
  // command trims wheel torque when the demanded slip exceeds peak traction.
  const slipExcess=Math.max(...d.longitudinalSlip.map(v=>Math.max(0,driveDirection*v-.12)));
  const torqueLimit=d.tcsEnabled&&driving?clamp(1-1.8*slipExcess,.20,1):1;
  d.torqueLimit+=(torqueLimit-d.torqueLimit)*(1-Math.exp(-24*dt));
  d.tcsActive=!!d.tcsEnabled&&driving&&d.torqueLimit<.95;
- const driveTotal=driveDirection*accelPedal*VEHICLE.maxDriveN*powerTaper*(input.boost?1.28:1)*d.torqueLimit*(d.gear==='R'?.5:1);
+ const driveTotal=driveDirection*accelPedal*VEHICLE.maxDriveN*powerTaper*(input.boost?1.28:1)*d.torqueLimit*batteryDerate*(d.gear==='R'?.5:1);
  const brakeTotal=brakePedal*VEHICLE.maxBrakingN;
  let sumFx=0,sumFy=0,torque=0,maxUtil=0,abs=false;
  const previousAx=d.longitudinalAccel,previousAy=d.lateralAccel;
@@ -81,15 +90,24 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
    const n=tireNormal(s,m,i,previousAx,previousAy);
    d.wheelLoads[i]=n;
    const wheelF=vf+d.yawRate*lx,wheelR=vr+d.yawRate*lz;
-   const delta=front?d.steerAngle:0;
+   const delta=(front?d.steerAngle:0)+(s.suspension?.wheelToe?.[i]||0);
    const wheelLong=wheelF*Math.cos(delta)-wheelR*Math.sin(delta);
    const wheelSide=wheelR*Math.cos(delta)+wheelF*Math.sin(delta);
    // Pacejka-inspired smooth saturation, relative to instantaneous vertical load.
    // Lateral tire force does not exist at zero wheel contact.
    const slipAngle=Math.atan2(wheelSide,Math.max(2,Math.abs(wheelLong)));
-   const tireMu=effectiveTireMu(mu,d.tireTemperature[i],n,speed,d.tireWear[i]);
+   d.relaxedSlipAngles[i]=relaxationStep(d.relaxedSlipAngles[i],slipAngle,speed,dt,1.7);
+   d.tirePressure[i]=tirePressureFromHeat(240,d.carcassTemperature[i],25);
+   const pressureRatio=d.tirePressure[i]/240;
+   const pressureFactor=clamp(1-.12*Math.abs(Math.log(pressureRatio)),.75,1);
+   const compoundFactor=d.tireCompound==='touring'?.91:d.tireCompound==='track'?1.09:1;
+   const hydroplane=d.waterDepth>0?clamp(1-d.waterDepth*Math.pow(Math.abs(wheelLong)/28,2)*.62,.26,1):1;
+   const tireMu=effectiveTireMu(mu,d.tireTemperature[i],n,speed,d.tireWear[i])*pressureFactor*compoundFactor*hydroplane;
    const lateralMax=tireMu*n;
-   let fy=-lateralMax*Math.tanh(VEHICLE.corneringRate*slipAngle);
+   const camber=s.suspension?.wheelCamber?.[i]||0;
+   let fy=-magicFormulaForce(d.relaxedSlipAngles[i],n,tireMu,
+        VEHICLE.corneringRate*clamp(pressureRatio,.70,1.22),1.12)+camber*n*.12*tireMu;
+   fy=clamp(fy,-lateralMax,lateralMax);
    const axleFraction=front?.46:.54;
    const drive=driveTotal*axleFraction/2;
    const brake=brakeTotal*(front?.62:.38)/2*brakeFadeFactor(d.brakeTemperature[i]);
@@ -118,7 +136,8 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
    d.tireTemperature[i]=clamp(d.tireTemperature[i]+(slipHeat*.000075-(d.tireTemperature[i]-26)*.06)*dt,10,145);
    // Wear accrues from frictional work at the contact patch (not distance
    // alone); a sliding tire wears faster, progressively losing adhesion.
-   d.tireWear[i]=clamp(d.tireWear[i]+slipHeat*dt/8.5e7,0,1);
+   d.tireWear[i]=clamp(d.tireWear[i]+slipHeat*dt/(d.tireCompound==='track'?6.2e7:8.5e7),0,1);
+   d.carcassTemperature[i]=clamp(d.carcassTemperature[i]+((d.tireTemperature[i]-d.carcassTemperature[i])*.13- (d.carcassTemperature[i]-24)*.012)*dt,0,115);
    const discHeat=Math.abs(brake*wheelLong)*.00048;
    d.brakeTemperature[i]=clamp(d.brakeTemperature[i]+(discHeat-(d.brakeTemperature[i]-27)*(.032+speed*.0007))*dt,20,690);
  }
@@ -171,6 +190,7 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
  const regen=Math.min(50000,recuperatedWatts)*.68;
  d.powerKw=tractionWatts/1000/0.91;d.regenKw=regen/1000;
  d.soc=clamp(d.soc+(regen-d.powerKw*1000)*dt/(VEHICLE.capacityKWh*3.6e6)*100,0,100);
+ d.batteryTemp=clamp(d.batteryTemp+((d.powerKw*.008)-.018*(d.batteryTemp-26))*dt,12,90);
  if(s.speed>1&&brakePedal)d.brakeDistance+=s.speed*dt;
  return d;
 }
