@@ -197,3 +197,17 @@
 #world canvas{touch-action:none;cursor:default}
 #app[data-camera="orbit"] #world canvas{cursor:grab}
 #app[data-camera="orbit"] #world canvas:active{cursor:grabbing}
+
+/* V3.3: opt-in powertrain solver panel; no more permanently stacked readouts. */
+.solver-details{margin:10px 0 14px;border:1px solid #7094aa65;border-radius:9px;background:#071925;color:#c5dbe7;overflow:hidden}
+.solver-details summary{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;padding:13px 12px;list-style:none;font-size:10px;font-weight:700;letter-spacing:.09em;user-select:none}
+.solver-details summary::-webkit-details-marker{display:none}
+.solver-details summary::before{content:'+';font-size:16px;color:#9dede1;line-height:1}
+.solver-details[open] summary::before{content:'−'}
+.solver-details summary span{margin-left:auto;font-size:8px;color:#88bbc4;font-weight:500}
+.solver-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:0 10px 10px}
+.solver-grid>div{min-width:0;padding:9px;border:1px solid #6d91a63a;border-radius:7px;background:#102934}
+.solver-grid span{display:block;font-size:8px;color:#a9c5d1;letter-spacing:.045em}
+.solver-grid b{display:block;margin-top:5px;color:#eafffe;font:650 14px ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.solver-details p{font-size:9px;line-height:1.5;color:#9cb9c7;margin:0;padding:0 12px 12px}
+@media(max-width:760px){.solver-details summary{padding:10px;font-size:9px}.solver-grid b{font-size:12px}}

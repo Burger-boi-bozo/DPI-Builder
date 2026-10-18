@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#10151e">
   <meta name="description" content="Take the flying Roadster to a desert test range. Launch with cold-gas thrusters, hit aerial checkpoints, and land the impossible.">
-  <title>Roadster / Experimental Flight V3.2</title>
+  <title>Roadster / Experimental Flight V3.3</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2310151e'/%3E%3Cpath d='M12 46L30 12h8L24 38h26l-5 8z' fill='%23c0a4ff'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="./style.css?v=3.2.0">
+  <link rel="stylesheet" href="./style.css?v=3.3.0">
   <style id="critical-layout-v30">
     /* Versioned failsafe for browsers retaining pre-2.6 stylesheet assets. */
     #app .research-panel{position:absolute;top:90px;right:22px;left:auto;bottom:auto;width:min(385px,calc(100vw - 44px));max-height:calc(100dvh - 125px);overflow-y:auto;overflow-x:hidden;z-index:15;color:#eaf5ff;background:#091a27f2;border:1px solid #b2d4e54a;border-radius:14px;box-shadow:0 20px 65px #0008;padding:15px;box-sizing:border-box}
@@ -26,7 +26,7 @@
     <div class="vignette"></div>
     <header class="topbar">
       <a class="brand" href="#" id="brand" aria-label="Roadster Flight Lab home"><svg viewBox="0 0 36 36" aria-hidden="true"><path d="M3 28 16 5h6L12 23h20l-3 5z"/><path d="m25 5-5 9h6l5-9z"/></svg><span>ROADSTER<small>FLIGHT LAB</small></span></a>
-      <div class="top-meta"><span class="status-dot"></span> <span>MCGREGOR TEST RANGE</span><span class="separator">/</span><span class="dim">V3.2 · HANDLING CAMPUS</span></div>
+      <div class="top-meta"><span class="status-dot"></span> <span>MCGREGOR TEST RANGE</span><span class="separator">/</span><span class="dim">V3.3 · HANDLING CAMPUS</span></div>
       <div class="toolbar"><button id="orbitButton" class="tool text-tool orbit-toggle" type="button" aria-pressed="false" title="Free orbit: drag to rotate, scroll zoom, right-drag pan, double-click reset (O)">ORBIT CAM</button><button id="telemetryToggle" class="tool text-tool systems-toggle" aria-expanded="false" type="button">SHOW SYSTEMS</button><button id="environmentButton" class="tool text-tool small-tool" title="Cycle lighting conditions (T)">GOLDEN HOUR</button><button id="photoButton" class="tool text-tool small-tool" title="Save high-resolution screenshot (H)">PHOTO ↗</button><button id="referencesButton" class="tool text-tool" title="Reveal videos">THE INSPIRATION <span>↗</span></button><button id="audioButton" class="tool icon-tool" aria-label="Enable sound" title="Toggle sound (M)"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path id="audioWaves" d="m16 9 5 6m0-6-5 6"/></svg></button><button id="fullButton" class="tool icon-tool" aria-label="Enter fullscreen" title="Fullscreen"><svg viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button><button id="pauseButton" class="tool icon-tool hidden" aria-label="Pause game" title="Pause (Esc)">Ⅱ</button></div>
     </header>
 
@@ -75,6 +75,22 @@
             <div><span>UNSPRUNG HUB</span><b id="driveHub">0 mm</b></div>
             <div><span>AVAILABLE TORQUE</span><b id="driveTorque">100%</b></div>
           </div>
+          <details class="solver-details" id="solverDetails">
+            <summary>ADVANCED PHYSICS ENGINE <span>V3.3 · LIVE</span></summary>
+            <div class="solver-grid">
+              <div><span>FRONT MOTOR LIMIT</span><b id="solverFront">0 kN</b></div>
+              <div><span>REAR MOTOR LIMIT</span><b id="solverRear">0 kN</b></div>
+              <div><span>BRAKE PRESSURE</span><b id="solverPressure">0%</b></div>
+              <div><span>REGENERATION</span><b id="solverRegen">0 kW</b></div>
+              <div><span>ENERGY DRAWN</span><b id="solverEnergy">0 kJ</b></div>
+              <div><span>ENERGY RECOVERED</span><b id="solverRecovered">0 kJ</b></div>
+              <div><span>PEAK LATERAL</span><b id="solverLatG">0.00 g</b></div>
+              <div><span>0–60 MPH</span><b id="solverZero60">—</b></div>
+              <div><span>¼ MILE</span><b id="solverQuarter">—</b></div>
+              <div><span>TIRE SLIP HEAT</span><b id="solverSlipEnergy">0 kJ</b></div>
+            </div>
+            <p>Physics-derived measurements, not measured Tesla performance. Runs are reset with the session.</p>
+          </details>
           <div class="dynamics-actions"><button type="button" class="surface-toggle" id="surfaceToggle" title="Toggle wet/dry road grip (Y)">ROAD / DRY</button><button type="button" class="surface-toggle" id="compoundToggle" title="Cycle tire compound (I)">I · SPORT TIRES</button><button type="button" class="surface-toggle" id="tractionToggle" aria-pressed="true" title="Enable or disable torque-managed traction control (K)">K · TRACTION CONTROL ON</button></div>
           <section id="tuningWorkbench" class="tuning-bench" aria-label="Chassis tuning workbench">
             <div class="tuning-heading"><span>SETUP WORKBENCH</span><small>LIVE CALIBRATION</small></div>
@@ -113,6 +129,6 @@
     <div id="loading" class="loading"><span class="loader"></span><p>PREPARING THE TEST RANGE</p></div>
     <div id="errorPanel" class="error-panel hidden"><h2>The test range couldn’t start.</h2><p id="errorMessage">Please enable WebGL in your browser and reload.</p><button class="primary" onclick="location.reload()">TRY AGAIN ↗</button></div>
   </main>
-  <script type="module" src="./game.mjs?v=3.2.0"></script>
+  <script type="module" src="./game.mjs?v=3.3.0"></script>
 </body>
 </html>

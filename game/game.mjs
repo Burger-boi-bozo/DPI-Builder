@@ -1,9 +1,9 @@
 import {PROVING_ROUTES,SLALOM_PYLONS,WET_PATCH} from './range.mjs';
 import {createScene} from './scene.mjs';
 import {createState,step,resetPosition,GATES,LOOP,clamp,heightAt,missionGateCount} from './physics.mjs';
-import {makeResearchState,stepResearch,RESEARCH_STAGES,setPrecision,makeDynamicsState} from './research.mjs';
-import {createSuspension,suspensionStep,SUSPENSION,CHASSIS_SETUPS,setChassisSetup,setChassisAdjustment,tuningParameters} from './suspension.mjs?v=3.0.0';
-import {makeVehicleDynamics,steeringAngles} from './vehicle.mjs';
+import {makeResearchState,stepResearch,RESEARCH_STAGES,setPrecision,makeDynamicsState} from './research.mjs?v=3.3.0';
+import {createSuspension,suspensionStep,SUSPENSION,CHASSIS_SETUPS,setChassisSetup,setChassisAdjustment,tuningParameters} from './suspension.mjs?v=3.3.0';
+import {makeVehicleDynamics,steeringAngles} from './vehicle.mjs?v=3.3.0';
 import {createOrbitState,orbitDrag,orbitPan,orbitZoom,orbitPose,resetOrbit} from './orbit.mjs?v=3.0.0';
 
 const $=id=>document.getElementById(id);
@@ -147,6 +147,16 @@ function initialize(w){
       $('driveHub').textContent=(1000*suspension.hubHeight.reduce((a,b)=>a+b,0)/4).toFixed(0)+' mm';
       $('compoundToggle').textContent='I · '+d.tireCompound.toUpperCase()+' TIRES';
       $('driveTorque').textContent=Math.round(100*d.torqueLimit)+'%';
+      $('solverFront').textContent=(d.frontMotorForceN/1000).toFixed(1)+' kN';
+      $('solverRear').textContent=(d.rearMotorForceN/1000).toFixed(1)+' kN';
+      $('solverPressure').textContent=Math.round(d.brakePressure*100)+'%';
+      $('solverRegen').textContent=d.regenKw.toFixed(1)+' kW';
+      $('solverEnergy').textContent=(d.energyAudit.batteryOutJ/1000).toFixed(0)+' kJ';
+      $('solverRecovered').textContent=(d.energyAudit.regenJ/1000).toFixed(0)+' kJ';
+      $('solverSlipEnergy').textContent=(d.energyAudit.tireSlipJ/1000).toFixed(0)+' kJ';
+      $('solverLatG').textContent=(d.metrics?.peakLateralG||0).toFixed(2)+' g';
+      $('solverZero60').textContent=d.metrics?.t060==null?'—':d.metrics.t060.toFixed(2)+' s';
+      $('solverQuarter').textContent=d.metrics?.quarterMileS==null?'—':d.metrics.quarterMileS.toFixed(2)+' s';
       $('tractionToggle').textContent='K · TRACTION CONTROL '+(d.tcsEnabled?'ON':'OFF');
       $('tractionToggle').setAttribute('aria-pressed',String(d.tcsEnabled));
       $('surfaceToggle').textContent=state.roadMu<.7?'ROAD / WET':'ROAD / DRY';

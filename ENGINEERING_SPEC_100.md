@@ -49,3 +49,16 @@ The full 100 concepts are also listed in [`ROADMAP_100.md`](ROADMAP_100.md). Fur
 - 61/67/83: separate slalom, braking course, skidpad, continuous route data, localized wet asphalt, dynamic engineering minimap. Full laser-scan data and terrain deformation remain pending.
 - 88: basic gamepad steering/trigger support added. Calibration, deadzone UI and accessibility binding editor remain pending.
 - No additional items in the 100-item specification are claimed fully validated.
+
+
+## V3.3 — engine work delivered / still partial
+
+- **21:** front/rear concept motor torque maps include distinct shaft speed, base torque, max power, and a redline taper. Their coefficients are not measured OEM maps.
+- **22/24:** speed-dependent motor axle envelopes and conservative left/right force redistribution now account for total requested force; a physically modeled torque-vectoring differential is still outstanding.
+- **23:** thermal/SOC discharge derating and high-SOC/cold charging limits now constrain the engine and regenerative path; cell-level electrothermal modeling remains outstanding.
+- **27/28:** hydraulic pressure has first-order rise/release; driver brake demand is blended into power-limited regeneration and heat-sensitive friction brakes. Wheel-level ABS remains a simplified grip limiter.
+- **11/12:** longitudinal relaxation and a smooth nonlinear slip curve added alongside the existing lateral tire model. Friction ellipse avoids summing independently saturated forces. Tire parameters are not fitted to measured data.
+- **30:** live 0–60 and quarter-mile timers plus peak lateral g and energy counters are available; standardized surface calibration and validated skidpad/slalom timing are not.
+- **41/42/43/47/49:** three-axis torque/rate integration, virtual balanced angular thruster couples, propellant-dependent inertia, actuator lag, and fuel use for attitude/translational jets have been added. A true coupled 6-DOF spacecraft model with real nozzle geometry/pressure dynamics is still **not implemented**.
+- **95:** added an invariant showing fixed 120 Hz stepping yields identical physics for 30, 60 and 120 FPS rendering under the same inputs.
+- V3.3 passes **117 numerical and CPU geometry checks**. This does **not** mean 117 of the 100 requested engineering requirements are complete. No automotive engineering validation or real-GPU screenshot differential test has been performed.

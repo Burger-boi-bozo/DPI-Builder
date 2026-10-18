@@ -1,5 +1,6 @@
 import {surfaceGripAt,waterDepthAt,SLALOM_PYLONS} from './range.mjs';
 import {HARDPOINTS,magicFormulaForce,relaxationStep,tirePressureFromHeat} from './engineering.mjs';
+import {PT,motorAxleForce,batteryPowerLimits,advanceActuator,brakeBlend,allocateMotorForces,longitudinalMagic,combinedTireLimit,rotationalStep,advanceMeasurements} from './powertrain.mjs?v=3.3.0';
 // Concept AWD EV tire / steering / braking model. Not calibrated to a Tesla.
 // Ground-only: 4 contact patches use the suspension solver's individual loads.
 // SI: m, s, kg, N, rad, J. The flight integrator remains independent.
@@ -47,6 +48,9 @@ export function makeVehicleDynamics(){return {
  brakeTemperature:[28,28,28,28],
  tireWear:[0,0,0,0],tcsEnabled:true,tcsActive:false,torqueLimit:1,gear:"D",shiftHold:0,
  soc:88,regenKw:0,powerKw:0,absActive:false,escActive:false,
+ driveActuator:0,brakePressure:0,regenForceN:0,frontMotorForceN:0,rearMotorForceN:0,
+ vectoringEnabled:true,vectoringMomentNm:0,relaxedLongSlip:[0,0,0,0],
+ wheelSpinInitialized:false,metrics:null,energyAudit:{batteryOutJ:0,regenJ:0,frictionBrakeJ:0,tireSlipJ:0},
  longitudinalAccel:0,lateralAccel:0,velocityForward:0,velocityLateral:0,
  gripUtilization:0,brakeDistance:0,contactImpacts:0,impactEnergyJ:0,hitPylons:[],pylonImpacts:0
 };}
@@ -92,19 +96,29 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
  const brakePedal=braking?clamp(Number(d.gear==='D'?input.brake:input.throttle)||1,0,1):0;
  const steerWheels=steeringAngles(d.steerAngle);
  // Torque/speed map and battery derating; this is an illustrative EV motor map.
- const motorRpm=speed/VEHICLE.wheelRadius*60/(2*Math.PI)*8.8;
- const powerTaper=clamp(1-Math.pow(motorRpm/(d.gear==='R'?4800:14500),1.4),.08,1);
- const batteryDerate=clamp(Math.min((d.soc-3)/14,(68-d.batteryTemp)/20,1),.16,1);
+ const batteryLimits=batteryPowerLimits(d.soc,d.batteryTemp);
+ const motorFront=motorAxleForce(speed,d.soc,d.batteryTemp,'front');
+ const motorRear=motorAxleForce(speed,d.soc,d.batteryTemp,'rear');
+ const maxMotorForce=Math.min(VEHICLE.maxDriveN,motorFront+motorRear);
+ // Charge/discharge, hydraulic pressure and motor requests have finite response.
+ d.driveActuator=advanceActuator(d.driveActuator,driving?clamp(Number(input.throttle)||1,0,1):0,dt,PT.motorTimeConstant,.065);
+ d.brakePressure=advanceActuator(d.brakePressure,braking?clamp(Number(d.gear==='D'?input.brake:input.throttle)||1,0,1):0,dt,PT.hydraulicRise,PT.hydraulicRelease);
  // Per-wheel slip is sampled from the previous 120 Hz step; the next motor
  // command trims wheel torque when the demanded slip exceeds peak traction.
  const slipExcess=Math.max(...d.longitudinalSlip.map(v=>Math.max(0,driveDirection*v-.12)));
  const torqueLimit=d.tcsEnabled&&driving?clamp(1-1.8*slipExcess,.20,1):1;
  d.torqueLimit+=(torqueLimit-d.torqueLimit)*(1-Math.exp(-24*dt));
  d.tcsActive=!!d.tcsEnabled&&driving&&d.torqueLimit<.95;
- const driveTotal=driveDirection*accelPedal*VEHICLE.maxDriveN*powerTaper*(input.boost?1.28:1)*d.torqueLimit*batteryDerate*(d.gear==='R'?.5:1);
- const brakeTotal=brakePedal*VEHICLE.maxBrakingN;
- let sumFx=0,sumFy=0,torque=0,maxUtil=0,abs=false;
+ const driveTotal=(driving?driveDirection*d.driveActuator:0)*maxMotorForce*(input.boost?1.12:1)*d.torqueLimit*(d.gear==='R'?.5:1);
+ const blend=brakeBlend(d.brakePressure,speed,d.soc,d.batteryTemp);
+ const brakeTotal=blend.frictionForceN;
+ d.regenForceN=blend.regenForceN;
+ d.frontMotorForceN=motorFront;d.rearMotorForceN=motorRear;
+ const desiredYaw=clamp(vf*Math.tan(d.steerAngle)/VEHICLE.wheelbase,-2.1,2.1);
+ const motorForceByWheel=allocateMotorForces(Math.abs(driveTotal),desiredYaw-d.yawRate,d.steerAngle,d.vectoringEnabled);
+ let sumFx=0,sumFy=0,torque=0,maxUtil=0,abs=false,slipPower=0,brakeWork=0;
  const previousAx=d.longitudinalAccel,previousAy=d.lateralAccel;
+ if(!d.wheelSpinInitialized){for(let i=0;i<4;i++)d.wheelOmega[i]=vf/VEHICLE.wheelRadius;d.wheelSpinInitialized=true;}
  for(let i=0;i<4;i++){
    const [lx,lz]=corners[i],front=i<2;
    const n=tireNormal(s,m,i,previousAx,previousAy);
@@ -132,23 +146,27 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
    let fy=-magicFormulaForce(d.relaxedSlipAngles[i],n,tireMu,
         VEHICLE.corneringRate*clamp(pressureRatio,.70,1.22),1.12)+camber*n*.12*tireMu;
    fy=clamp(fy,-lateralMax,lateralMax);
-   const axleFraction=front?.46:.54;
-   const drive=driveTotal*axleFraction/2;
-   const brake=brakeTotal*(front?.62:.38)/2*brakeFadeFactor(d.brakeTemperature[i]);
+   const drive=driveDirection*motorForceByWheel[i];
+   const brake=brakeTotal*(front?PT.brakeFrontSplit:1-PT.brakeFrontSplit)/2*brakeFadeFactor(d.brakeTemperature[i]);
+   const regenBrake=blend.regenForceN*(front?.3:.7)/2;
    const roadSign=wheelLong>.12?1:wheelLong<-.12?-1:0;
-   let demand=drive-brake*roadSign;
-   // Combine braking and cornering inside a friction circle (not independent grip).
+   let demand=drive-(brake+regenBrake)*roadSign;
+   // Two-dimensional friction ellipse caps the patch as a single vector.
+   const spinTarget=wheelLong/VEHICLE.wheelRadius;
+   const rawSlip=clamp((d.wheelOmega[i]*VEHICLE.wheelRadius-wheelLong)/Math.max(2,Math.abs(wheelLong)),-3,3);
+   d.relaxedLongSlip[i]=relaxationStep(d.relaxedLongSlip[i],rawSlip,Math.max(8,Math.abs(wheelLong)),dt,PT.wheelSlipRelaxLength);
+   const tireLong=longitudinalMagic(d.relaxedLongSlip[i],n,tireMu);
    const longitudinalLimit=Math.sqrt(Math.max(0,lateralMax*lateralMax-fy*fy));
    if(brakePedal&&Math.abs(demand)>longitudinalLimit+.01)abs=true;
-   let fx=clamp(demand,-longitudinalLimit,longitudinalLimit);
-   const spinTarget=wheelLong/VEHICLE.wheelRadius;
-   const spinMismatch=(d.wheelOmega[i]-spinTarget);
-   // Modest transient relaxation. A wheel may over/under-spin, but cannot
-   // generate traction beyond the same friction envelope.
-   fx=clamp(fx+spinMismatch*20,-longitudinalLimit,longitudinalLimit);
-   d.wheelOmega[i]+=clamp((drive-brake*roadSign-fx)*VEHICLE.wheelRadius/VEHICLE.wheelInertia,-240,240)*dt;
-   // Rolling wheel speed converges to kinematic speed when fully gripping.
-   if(n>100){d.wheelOmega[i]+=(spinTarget-d.wheelOmega[i])*(1-Math.exp(-18*dt));}
+   // A patch-slip transient is coupled to motor/brake demand: the force
+   // follows wheel rotation yet does not teleport to an infinite-slip state.
+   const blendedContact=clamp(.90*demand+.10*tireLong,-longitudinalLimit,longitudinalLimit);
+   const limited=combinedTireLimit(blendedContact,fy,lateralMax);
+   let fx=limited.fx;fy=limited.fy;
+   d.wheelOmega[i]=rotationalStep(d.wheelOmega[i],drive-regenBrake*roadSign,brake,fx,VEHICLE.wheelRadius,VEHICLE.wheelInertia,dt);
+   // Low-speed wheel/road synchronisation models rubber coupling; it only
+   // acts under positive normal load and never supplies net chassis force.
+   if(n>100){d.wheelOmega[i]+=(spinTarget-d.wheelOmega[i])*(1-Math.exp(-12*dt));}
    if(n<100)d.wheelOmega[i]*=Math.exp(-.9*dt);
    d.longitudinalSlip[i]=clamp((d.wheelOmega[i]*VEHICLE.wheelRadius-wheelLong)/Math.max(2,Math.abs(wheelLong)),-3,3);
    d.slipAngles[i]=slipAngle;d.tireForceX[i]=fx;d.tireForceY[i]=fy;
@@ -157,6 +175,7 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
    torque+=lz*fRight+lx*fForward;
    maxUtil=Math.max(maxUtil,lateralMax>0?Math.hypot(fx,fy)/lateralMax:0);
    const slipHeat=Math.abs(fy*wheelSide)+Math.abs(fx*(d.wheelOmega[i]*VEHICLE.wheelRadius-wheelLong));
+   slipPower+=slipHeat;brakeWork+=Math.abs(brake*wheelLong);
    d.tireTemperature[i]=clamp(d.tireTemperature[i]+(slipHeat*.000075-(d.tireTemperature[i]-26)*.06)*dt,10,145);
    // Wear accrues from frictional work at the contact patch (not distance
    // alone); a sliding tire wears faster, progressively losing adhesion.
@@ -172,7 +191,7 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
  // Aerodynamic side drag acts on lateral velocity and prevents endless drift.
  sumFy-=vr*(18+speed*1.3);
  // Yaw moment integrates independently: steering does not rotate the car on rails.
- const desiredRate=clamp(vf*Math.tan(d.steerAngle)/VEHICLE.wheelbase,-2.1,2.1);
+ const desiredRate=desiredYaw;
  const yawError=desiredRate-d.yawRate;
  const severeSlip=Math.abs(Math.atan2(vr,Math.max(2,Math.abs(vf))))>.22;
  d.escActive=!!s.assist&&speed>9&&(Math.abs(yawError)>.7||severeSlip);
@@ -229,9 +248,12 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
  d.longitudinalAccel=ax;d.lateralAccel=ay;d.velocityForward=nextForward;d.velocityLateral=nextSide;
  d.gripUtilization=clamp(maxUtil,0,1);d.absActive=abs;
  // Effective traction battery state: driving depletes, regenerative deceleration restores.
- const tractionWatts=Math.abs(driveTotal*nextForward),recuperatedWatts=brakePedal?Math.min(VEHICLE.regenBrakingN*Math.abs(nextForward),VEHICLE.regenBrakingN*25):0;
- const regen=Math.min(50000,recuperatedWatts)*.68;
- d.powerKw=tractionWatts/1000/0.91;d.regenKw=regen/1000;
+ const tractionWatts=Math.abs(driveTotal*nextForward);
+ const regen=Math.min(batteryLimits.chargeW,blend.regenPowerW)*.76;
+ d.powerKw=tractionWatts/1000/PT.drivetrainEfficiency;d.regenKw=regen/1000;
+ d.energyAudit.batteryOutJ+=d.powerKw*1000*dt;d.energyAudit.regenJ+=regen*dt;
+ d.energyAudit.frictionBrakeJ+=brakeWork*dt;d.energyAudit.tireSlipJ+=slipPower*dt;
+ d.metrics=advanceMeasurements(d.metrics,s.speed,d.lateralAccel,Math.hypot(s.vx,s.vz)*dt,dt);
  d.soc=clamp(d.soc+(regen-d.powerKw*1000)*dt/(VEHICLE.capacityKWh*3.6e6)*100,0,100);
  d.batteryTemp=clamp(d.batteryTemp+((d.powerKw*.008)-.018*(d.batteryTemp-26))*dt,12,90);
  if(s.speed>1&&brakePedal)d.brakeDistance+=s.speed*dt;

@@ -1,7 +1,8 @@
 // Roadster X-Flight: deterministic, physically inspired experimental-flight model.
 // An original concept simulation. Thruster performance is hypothetical, not Tesla performance data.
 import {clamp} from './physics.mjs';
-import {stepRoadVehicle} from './vehicle.mjs';
+import {stepRoadVehicle} from './vehicle.mjs?v=3.3.0';
+import {makeAttitudeState,integrateAttitude} from './attitude.mjs?v=3.3.0';
 export const RESEARCH_STAGES=[
   {name:'HOVER CAPTURE',detail:'Lift to 6–11 m. Stabilize over the launch pad for 1.8 s.',kind:'hover',x:0,y:8,z:42,radius:12},
   {name:'VECTOR TRANSFER',detail:'Navigate the low calibration torus.',kind:'gate',x:0,y:12,z:-36,radius:13},
@@ -20,6 +21,7 @@ export function makeResearchState(){return {
   mode:'research',x:0,y:0,z:42,yaw:0,pitch:0,roll:0,speed:0,vy:0,vx:0,vz:0,
   air:100,propellant:PROP_CAPACITY,temperature:23,structural:100,thrust:0,thrustG:0,
   windX:0,windZ:0,slip:0,grounded:true,boosting:false,lifting:false,precision:false,assist:true,
+  attitude:makeAttitudeState(),
   time:0,score:0,gate:0,stage:0,stableTime:0,completed:false,failed:false,
   objectives:{roll:false,jump:false,loop:false},resets:0,loopAngle:null,suction:false,
   verticalSpeed:0,peakAltitude:0,highestGs:0,landingGs:0,flightDistance:0,energy:100,
@@ -56,8 +58,7 @@ export function stepResearch(s,input,rawDt){
   const lateral=(input.strafeRight?1:0)-(input.strafeLeft?1:0);
   const turn=(input.left?1:0)-(input.right?1:0);
   const forward=(input.throttle?1:0)-(input.brake?1:0);
-  const yawRate=s.grounded?.8:.67;
-  s.yaw+=turn*yawRate*dt;
+  const attitude=integrateAttitude(s,{turn,forward,lateral,assist:s.assist,verticalSpeed:s.vy,windCross:s.windX||0},dt,s.propellant);
   // The closed-loop hover controller maintains a user-selected altitude, and
   // uses propellant to do so; it does not disable gravity or create free lift.
   let accelerationUp=0;
@@ -74,12 +75,18 @@ export function stepResearch(s,input,rawDt){
   // Mass flow = thrust / exhaust velocity. Effective exhaust velocity here is
   // a concept design parameter; it is intentionally exposed by the model.
   const exhaustVelocity=2300;
-  s.propellant=Math.max(0,s.propellant-thrustN/exhaustVelocity*dt-(boost?3.7*dt:0));
+  const flightForwardJet=propAvailable&&!s.grounded?3.4*forward:0;
+  const flightSideJet=propAvailable&&!s.grounded?5.5*lateral:0;
+  const translationJetNewtons=mass*Math.hypot(flightForwardJet,flightSideJet);
+  // Horizontal impulse is not free: side and forward nozzles consume the same
+  // finite propellant resource as the vertical and attitude-control jets.
+  const translationJetMass=translationJetNewtons/exhaustVelocity*dt;
+  s.propellant=Math.max(0,s.propellant-thrustN/exhaustVelocity*dt-(boost?3.7*dt:0)-attitude.jetFlowKg-translationJetMass);
   s.air=100*s.propellant/PROP_CAPACITY;
   const yawSin=Math.sin(s.yaw),yawCos=Math.cos(s.yaw);
   const contactGrip=s.grounded?clamp(s.suspension?.grip??1,.12,1.06):1;
-  const driveForce=(s.grounded?9.5*contactGrip:3.4)*forward+(boost?11.6*contactGrip:0);
-  const sideForce=(s.grounded?3.2*contactGrip:5.5)*lateral;
+  const driveForce=(s.grounded?9.5*contactGrip*forward:flightForwardJet)+(boost?11.6*contactGrip:0);
+  const sideForce=s.grounded?3.2*contactGrip*lateral:flightSideJet;
   const ax= -yawSin*driveForce + yawCos*sideForce;
   const az= -yawCos*driveForce - yawSin*sideForce;
   const rvx=s.vx-wind.x,rvz=s.vz-wind.z;
@@ -122,10 +129,8 @@ export function stepResearch(s,input,rawDt){
   s.peakAltitude=Math.max(s.peakAltitude,s.y);
   s.highestGs=Math.max(s.highestGs,Math.abs(accelerationUp-G)/G);
   s.slip=Math.atan2(lateral?sideForce:s.vx-wind.x,Math.max(1,Math.abs(driveForce)));
-  const yawPitch=clamp(-s.vy*.026,-.25,.24);
-  s.pitch+=(yawPitch-s.pitch)*(1-Math.exp(-3*dt));
-  const rollTarget=clamp((-lateral*.18-turn*.12-(s.vx-wind.x)*.012),-.34,.34);
-  s.roll+=(rollTarget-s.roll)*(1-Math.exp(-3*dt));
+  // Pitch/roll are now integrated angular states driven by cold-gas torque.
+  // They are no longer smoothed decorative targets of linear velocity.
   // Thermal and structural models are bounded, rate-based approximations.
   const heating=(thrustN/THRUST_MAX)*17+(boost?22:0)+.014*relativeSpeed*relativeSpeed;
   s.temperature=clamp(s.temperature+(heating-(s.temperature-23)*.09)*dt,23,320);

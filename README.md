@@ -1,4 +1,4 @@
-# Roadster X-Flight — Experimental Flight Lab V3.2
+# Roadster X-Flight — Experimental Flight Lab V3.3
 
 A self-hosted, original experimental-flight concept built on the recovered Roadster Flight Lab V1. This is **not** a physics-validated Tesla Roadster representation. Thruster characteristics, mass, aerodynamics, structural/thermal limits, and safety systems are hypothetical parameters designed for a playable R&D simulator. Not affiliated with Tesla or SpaceX.
 
@@ -40,7 +40,7 @@ Serve `game/` as a static directory. For example: `python3 -m http.server 18767 
 
 ## Test and deploy
 
-`node --test tests/*.test.mjs` runs 83 deterministic checks across V1 heritage physics, flight certification, suspension, four-contact-patch tire dynamics, collisions, and CPU-level 3D model integrity. `node --check game/*.mjs` verifies syntax. UI logic is additionally tested using a mocked renderer to exercise flight startup, telemetry, hover controller and checkpoint reset. **Full visual/WebGL playtesting on a GPU-enabled browser is still required.** The working sandbox blocks full WebGL; automated browser UI interactions use a renderer stub, while all 3D meshes receive direct CPU-level geometry integrity tests. GPU-rendered QA remains outstanding.
+`node --test tests/*.test.mjs` runs 117 deterministic checks across V1 heritage physics, flight certification, suspension, four-contact-patch tire dynamics, collisions, and CPU-level 3D model integrity. `node --check game/*.mjs` verifies syntax. UI logic is additionally tested using a mocked renderer to exercise flight startup, telemetry, hover controller and checkpoint reset. **Full visual/WebGL playtesting on a GPU-enabled browser is still required.** The working sandbox blocks full WebGL; automated browser UI interactions use a renderer stub, while all 3D meshes receive direct CPU-level geometry integrity tests. GPU-rendered QA remains outstanding.
 
 Production: Proxmox `pve` at `/opt/roadster-flight`, service `roadster-flight.service`, loopback port `18767`, Cloudflare `https://fly.dpifiles.org`. Run `bash deploy/install-on-proxmox.sh` as root from a current `roadster-flight-v2` checkout to test, back up the previous version and swap in the self-contained archive. Source branch and release archive remain synchronized.
 
@@ -110,3 +110,15 @@ New ground-vehicle dynamics include tire-temperature and load-sensitive grip, a 
 - New fixed-timestep tests verify steering direction, mirror symmetry, neutral caster return, analog input, geometry, wet-patch grip, navigable routes, and single-event cone impact.
 - For the first drive, use **Suspension Lab**; hold **W** to accelerate; **A** is left, **D** is right, **S** brakes and then requests Reverse when held stationary. Drive south (negative Z) past the damper corridor to reach slalom and skidpad.
 - Physics uses an improved coupled four-wheel approximation rather than a validated multibody dynamics engine. Visual rendering is not fully GPU-verified here.
+
+
+## V3.3 — Physics architecture overhaul (117 regression checks)
+
+- New **`game/powertrain.mjs`** models independent front and rear torque-speed maps, power-limited EV motor speed envelopes, pack thermal/SOC derating, motor-command lag, rate-limited hydraulic pressure, mechanical brake/regen blending, controlled differential vectoring and wheel angular reaction torque.
+- Longitudinal slip has its own relaxation state and nonlinear bounded force curve. The four contact patches share combined lateral/longitudinal friction constraints. This remains a stabilized hybrid contact solver, not experimentally fitted tire data.
+- Ground engineering statistics now include front/rear motor limits, brake pressure, regenerative output, battery draw, recovered energy, slip-work losses, 0–60 MPH and quarter-mile timers, and peak lateral acceleration. These live under an **optional collapsed panel** within Show Systems.
+- New **`game/attitude.mjs`** integrates independent yaw/pitch/roll angular rates and moments of inertia. Cold-gas reaction jets debit propellant for attitude control. Lateral and forward jet thrust also consume propellant; depleted tanks cannot propel the craft.
+- New tests cover motor-envelope limits, battery cold/heat/SOC derates, thermal/regen constraints, friction ellipse invariants, torque-vectoring symmetry, hydraulic lag, wheel inertia, deterministic solver behavior under randomized input, attitude rate stabilization, and 30/60/120 FPS frame-cadence consistency. **117/117 tests** pass locally prior to release.
+- Actual WebGL GPU rendering remains unverified in the test sandbox. The model and coefficients remain fictional and should **not** be used for Roadster engineering or vehicle safety predictions.
+
+See [`PHYSICS_ENGINE.md`](PHYSICS_ENGINE.md) for system equations, invariants and remaining accuracy limits.
