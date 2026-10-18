@@ -1,0 +1,15 @@
+name: Roadster V1
+on:
+  push:
+    branches: [roadster-flight-v1]
+  pull_request:
+    branches: [roadster-flight-v1]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --check dist/game.mjs && node --check dist/scene.mjs && node --test tests/physics.test.mjs

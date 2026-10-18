@@ -1,11 +1,5 @@
-dist/
-node_modules/
-releases/
-.v2-release-*/
 .DS_Store
-*.log
-
-game/three.module.min.js
-game/font-*.ttf
-
-.asset-cache-v34/
+node_modules/
+*.tar.gz
+*.zip
+.openai/preview*
