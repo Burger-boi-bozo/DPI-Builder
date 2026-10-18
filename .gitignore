@@ -7,3 +7,5 @@ releases/
 
 game/three.module.min.js
 game/font-*.ttf
+
+.asset-cache-v34/
