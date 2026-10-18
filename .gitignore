@@ -6,3 +6,5 @@ node_modules/
 
 /public/
 __pycache__/
+
+/releases/

@@ -100,8 +100,8 @@ function updateHUD(){
   drawMap();drawG();
 }
 function frame(now){
-  requestAnimationFrame(frame);const dt=Math.min(.05,(now-(last||now))/1000);last=now;elapsed+=dt;fpsAverage+=(1/Math.max(.005,dt)-fpsAverage)*.025;input=readInput();
-  if(phase==='play'){accumulator+=dt;let steps=0;while(accumulator>=1/120&&steps++<8){const events=step(s,input,1/120);accumulator-=1/120;events.forEach(event);if(phase!=='play')break;}}else accumulator=0;
+  requestAnimationFrame(frame);const raw=(now-(last||now))/1000,dt=Math.min(.1,raw);last=now;elapsed+=dt;fpsAverage+=(1/Math.max(.005,raw)-fpsAverage)*.025;input=readInput();
+  if(phase==='play'){accumulator+=dt;let steps=0;while(accumulator>=1/120&&steps++<12){const events=step(s,input,1/120);accumulator-=1/120;events.forEach(event);if(phase!=='play')break;}}else accumulator=0;
   audio.update(s,input,phase==='play');world.update(s,input,phase==='play'?dt:phase==='menu'?dt:0,phase==='menu'?'menu':'play',elapsed);
   uiElapsed+=dt;if(uiElapsed>.05&&phase!=='menu'){updateHUD();uiElapsed=0;}if(now>toastUntil)$('toast').classList.remove('visible');
 }

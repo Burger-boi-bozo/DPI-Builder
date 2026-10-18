@@ -44,7 +44,7 @@ public.mkdir(exist_ok=True)
 link = public / 'v1'
 if not link.exists():
     link.symlink_to(ROOT / 'dist', target_is_directory=True)
-assert link.resolve() == (ROOT / 'dist').resolve()
+assert link.resolve() == (ROOT / 'dist').resolve() or (ROOT / 'releases').resolve() in link.resolve().parents, 'Unexpected V1 content target.'
 UNIT.write_text('''[Unit]
 Description=Roadster Flight Lab V1
 After=network-online.target

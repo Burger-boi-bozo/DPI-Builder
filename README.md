@@ -63,7 +63,7 @@ node --check dist/vehicle.mjs
 
 Thirty deterministic checks cover static load balance, acceleration/braking load transfer, stopping distance, energy loss, reverse, steering symmetry, grip saturation, gravel, conserved airborne momentum, gas accounting/exhaustion, altitude control, roll recovery, pit refill, ramp launches, landing, recovery penalties, swept gate crossings, ordered trial progress, timed completion, timestep convergence, fan load and wall collision. The ordered gate test checks crossing/score logic, not autonomous completion of the course.
 
-For the existing DPI Proxmox host, `deploy/install-v1.py` remains the initial isolated-route installer. V1 uses `roadster-flight-v1.service` on loopback port 18768. The root game uses its own service and port 18767. Updates are staged as immutable release directories and published by atomically replacing `public/v1`; the prior release is retained for rollback. No tunnel edits are needed for normal updates.
+For the existing DPI Proxmox host, `deploy/install-v1.py` remains the initial isolated-route installer. V1 uses `roadster-flight-v1.service` on loopback port 18768. The root game uses its own service and port 18767. After pulling the branch, run `python3 deploy/update-v1.py`. Updates are staged as immutable release directories and published by atomically replacing `public/v1`; the prior release is retained for rollback. No tunnel edits are needed for normal updates.
 
 ## References and credits
 
@@ -74,3 +74,7 @@ For the existing DPI Proxmox host, `deploy/install-v1.py` remains the initial is
 - Three.js r170 / RGBELoader: MIT. Fonts: SIL OFL. See `dist/ASSET-CREDITS.md` and bundled licenses.
 
 Tesla reference images were used for modeling and are not bundled. The prior classic release remains in Git history at `d4009f6ddc09b99f2b97e8947a8b30ebea999191` on this branch.
+
+### Validation for this release
+
+The 30 physics checks passed locally and on the deployment host. A DOM/runtime smoke check exercised startup, acceleration HUD updates, pause/resume, lift and altitude hold, four cameras, photo mode, settings, viewport resizing and both challenge modes, with a mocked graphics backend. The model geometry was inspected from three angles. The available cloud browser could not create a WebGL context, including the lower-demand initialization fallback, so GPU rendering, mobile frame rate and live browser driving have not been visually verified for this release.

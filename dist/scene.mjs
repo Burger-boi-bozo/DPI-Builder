@@ -9,14 +9,14 @@ function texture(size,draw){const c=document.createElement('canvas');c.width=c.h
 function asphaltTexture(){return texture(1024,(c,n)=>{c.fillStyle='#55595c';c.fillRect(0,0,n,n);const data=c.getImageData(0,0,n,n);for(let i=0;i<data.data.length;i+=4){const noise=rand()*30-15;data.data[i]+=noise;data.data[i+1]+=noise;data.data[i+2]+=noise;}c.putImageData(data,0,0);c.strokeStyle='rgba(20,23,25,.22)';c.lineWidth=1.4;for(let i=0;i<23;i++){c.beginPath();let x=rand()*n,y=rand()*n;c.moveTo(x,y);for(let j=0;j<7;j++){x+=rand()*45-22;y+=rand()*50;c.lineTo(x,y);}c.stroke();}});}
 export async function createScene(container,settings){
   const scene=new T.Scene();scene.background=new T.Color(0xb3c2cd);scene.fog=new T.FogExp2(0xb4c4ce,.00065);
-  const renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;container.append(renderer.domElement);
+  let renderer;try{renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});}catch{renderer=new T.WebGLRenderer({antialias:false,alpha:false,powerPreference:'default'});}renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;container.append(renderer.domElement);
   const camera=new T.PerspectiveCamera(52,1,.07,4000);camera.position.set(6,3.5,34);
   const hemi=new T.HemisphereLight(0xcee2ff,0x726a57,1.15);scene.add(hemi);
   const sun=new T.DirectionalLight(0xffeddb,3.4);sun.position.set(-80,120,-60);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.near=1;sun.shadow.camera.far=320;sun.shadow.camera.left=-36;sun.shadow.camera.right=36;sun.shadow.camera.top=36;sun.shadow.camera.bottom=-36;sun.shadow.normalBias=.018;sun.shadow.bias=-.0001;scene.add(sun,sun.target);
   const mat=(color,roughness=.85,metalness=0)=>new T.MeshStandardMaterial({color,roughness,metalness});
   const mesh=(geo,material,pos,cast=false,parent=scene)=>{const m=new T.Mesh(geo,material);if(pos)m.position.set(...pos);m.castShadow=cast;m.receiveShadow=true;parent.add(m);return m;};
   const box=(size,pos,m,cast=false,parent=scene)=>mesh(new T.BoxGeometry(...size),m,pos,cast,parent);
-  const roadTex=asphaltTexture();roadTex.wrapS=roadTex.wrapT=T.RepeatWrapping;roadTex.repeat.set(150,150);roadTex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+  const roadTex=asphaltTexture();roadTex.wrapS=roadTex.wrapT=T.RepeatWrapping;roadTex.repeat.set(1000,1000);roadTex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
   const concrete=mat(0x96958e),asphalt=new T.MeshStandardMaterial({map:roadTex,color:0x868b90,roughness:.94,bumpMap:roadTex,bumpScale:.018});
   const landTex=texture(512,(c,n)=>{c.fillStyle='#87856c';c.fillRect(0,0,n,n);for(let i=0;i<35000;i++){let l=rand()*45+65;c.fillStyle=`rgba(${l+17},${l+14},${l},.25)`;c.fillRect(rand()*n,rand()*n,rand()*8+1,rand()*8+1);}});landTex.wrapS=landTex.wrapT=T.RepeatWrapping;landTex.repeat.set(180,180);landTex.anisotropy=8;
   const land=mesh(new T.PlaneGeometry(5000,5000),new T.MeshStandardMaterial({map:landTex,roughness:1}),[0,-.045,0]);land.rotation.x=-Math.PI/2;
@@ -58,6 +58,27 @@ export async function createScene(container,settings){
   const terrain=new T.PlaneGeometry(4200,4200,160,160);terrain.rotateX(-Math.PI/2);const tp=terrain.attributes.position,colors=[];
   for(let i=0;i<tp.count;i++){const x=tp.getX(i),z=tp.getZ(i),h=terrainHeight(x,z)||-7;tp.setY(i,h);const c=new T.Color(0x878878).lerp(new T.Color(0xb4b4a0),clamp01(h/140));colors.push(c.r,c.g,c.b);}terrain.setAttribute('color',new T.Float32BufferAttribute(colors,3));terrain.computeVertexNormals();mesh(terrain,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));
   const shrubs=new T.InstancedMesh(new T.IcosahedronGeometry(1,0),mat(0x6b7259),1900);scene.add(shrubs);let count=0;while(count<1900){const x=(rand()-.5)*1500,z=(rand()-.5)*1600-180;if(Math.abs(x)<30||Math.hypot(x,z+190)<215||OBSTACLES.some(b=>Math.abs(x-b.x)<b.w/2+15&&Math.abs(z-b.z)<b.d/2+15))continue;const k=.18+rand()*.6;dummy.position.set(x,k*.25,z);dummy.scale.set(k,k*.45,k*.8);dummy.rotation.y=rand()*6.28;dummy.updateMatrix();shrubs.setMatrixAt(count++,dummy.matrix);}dummy.scale.set(1,1,1);
+  // Batch immutable opaque scenery by material. Keep dynamic and instanced objects separate.
+  scene.updateMatrixWorld(true);
+  const batches=new Map();
+  scene.traverse(o=>{
+    if(!o.isMesh||o.isInstancedMesh||Array.isArray(o.material)||o.material.transparent)return;
+    const attributes=Object.keys(o.geometry.attributes).sort().join(',');
+    const key=[o.material.uuid,o.castShadow,o.receiveShadow,attributes].join('|');
+    if(!batches.has(key))batches.set(key,[]);batches.get(key).push(o);
+  });
+  for(const objects of batches.values()){
+    if(objects.length<2)continue;
+    const parts=objects.map(o=>{const g=o.geometry.clone().applyMatrix4(o.matrixWorld);if(!g.index)return g;const flat=g.toNonIndexed();g.dispose();return flat;}),merged=new T.BufferGeometry();
+    for(const name of Object.keys(parts[0].attributes)){
+      const attributes=parts.map(g=>g.attributes[name]),data=new Float32Array(attributes.reduce((n,a)=>n+a.array.length,0));let offset=0;
+      for(const a of attributes){data.set(a.array,offset);offset+=a.array.length;}
+      merged.setAttribute(name,new T.BufferAttribute(data,attributes[0].itemSize,attributes[0].normalized));
+    }
+    const combined=mesh(merged,objects[0].material,null,objects[0].castShadow);combined.receiveShadow=objects[0].receiveShadow;
+    for(const o of objects){o.parent.remove(o);o.geometry.dispose();}for(const p of parts)p.dispose();
+    merged.computeBoundingSphere();
+  }
   // Flight gates stay thin and readable; the geometry does not block the runway.
   const gates=[];for(let i=0;i<GATES.length;i++){const g=GATES[i],previous=i?GATES[i-1]:[0,3,42],group=new T.Group();group.position.set(...g);group.rotation.y=Math.atan2(g[0]-previous[0],g[2]-previous[2]);scene.add(group);const ring=mesh(new T.TorusGeometry(6.8,.055,6,80),new T.MeshStandardMaterial({color:0xb3a0da,emissive:0x60408d,emissiveIntensity:.8}),null,false,group);const tick=mesh(new T.TorusGeometry(6.9,.12,6,30,Math.PI*.35),new T.MeshBasicMaterial({color:0xb8a0f0}),null,false,group);tick.rotation.z=Math.PI*.325;gates.push({group,ring,tick});}
   const car=buildVehicle();scene.add(car.root);
@@ -91,7 +112,7 @@ export async function createScene(container,settings){
     for(const name of ['position','size','alpha','pcolor'])pgeo.attributes[name].needsUpdate=true;
     if(dt>0)for(let i=0;i<4;i++){const w=s.wheels[i];if(w.contact&&w.slip>.17&&s.speed>4&&s.surface==='ASPHALT'){const p=w.point.clone();p.y=.032;const old=lastSkids[i];if(old&&p.distanceTo(old)>.08&&p.distanceTo(old)<2){const side=V(.105,0,0).applyAxisAngle(V(0,1,0),s.yaw+w.angle),a=old.clone().sub(side),b=old.clone().add(side),c=p.clone().sub(side),d=p.clone().add(side);skidPos.set([...a.toArray(),...b.toArray(),...c.toArray(),...b.toArray(),...d.toArray(),...c.toArray()],skidCursor++%skidMax*18);skidGeo.attributes.position.needsUpdate=true;lastSkids[i]=p;}else if(!old||p.distanceTo(old)>2)lastSkids[i]=p;}else lastSkids[i]=null;}
     let desired,target;
-    if(mode==='menu'){const a=-.75+Math.sin(elapsed*.06)*.18;desired=s.p.clone().add(V(Math.sin(a)*7.6,2.25,-Math.cos(a)*7.6));target=s.p.clone().add(V(-1.5,.30,.35));camera.fov=39;}
+    if(mode==='menu'){const a=-.75+Math.sin(elapsed*.06)*.18;const portrait=camera.aspect<.8;desired=s.p.clone().add(V(Math.sin(a)*(portrait?11:7.6),portrait?2.9:2.25,-Math.cos(a)*(portrait?11:7.6)));target=s.p.clone().add(V(portrait?.05:1.65,portrait?1.2:.26,.35));camera.fov=portrait?55:39;}
     else if(photo||cameraMode===3){desired=s.p.clone().add(V(Math.sin(orbitYaw)*Math.cos(orbitPitch)*orbitDistance,Math.sin(orbitPitch)*orbitDistance+.5,Math.cos(orbitYaw)*Math.cos(orbitPitch)*orbitDistance));target=s.p.clone().add(V(0,.15,0));camera.fov=45;}
     else if(cameraMode===1){desired=V(-.39,.44,-.16).applyQuaternion(s.q).add(s.p);target=V(-.39,.39,-50).applyQuaternion(s.q).add(s.p);camera.fov=74;}
     else if(cameraMode===2){desired=V(0,.46,-1.3).applyQuaternion(s.q).add(s.p);target=V(0,.5,-50).applyQuaternion(s.q).add(s.p);camera.fov=70;}
