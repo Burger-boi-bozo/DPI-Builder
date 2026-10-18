@@ -76,7 +76,7 @@ assert 'KHR_draco_mesh_compression' in manifest['extensionsUsed']
 print('Roadster GLB verified:',len(manifest['meshes']),'meshes and four independent wheel assemblies')
 PYGLB
 for f in index.html vehicle.mjs scene.mjs world-v34.mjs roadster-model.mjs ASSET_CREDITS.md roadster-2020.glb GLTFLoader.js DRACOLoader.js BufferGeometryUtils.js;do test -s "$GAME/$f";done
-grep -q 'Roadster / Dynamics Lab V3.4' "$GAME/index.html"
+grep -q 'Roadster / Dynamics Lab V3.4.1' "$GAME/index.html"
 mkdir -p "$ROOT/releases"
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 if [ -d "$ROOT/dist" ];then BACKUP="$ROOT/releases/previous-$STAMP";mv "$ROOT/dist" "$BACKUP";fi
@@ -87,7 +87,7 @@ chown -R root:root "$ROOT/dist"
 if ! systemctl is-active --quiet roadster-flight.service;then systemctl restart roadster-flight.service;fi
 sleep 1
 curl -fsSI --max-time 8 http://127.0.0.1:18767/ >/dev/null
-curl -fsS --max-time 8 http://127.0.0.1:18767/ | grep -q 'Roadster / Dynamics Lab V3.4'
+curl -fsS --max-time 8 http://127.0.0.1:18767/ | grep -q 'Roadster / Dynamics Lab V3.4.1'
 for f in roadster-2020.glb GLTFLoader.js DRACOLoader.js BufferGeometryUtils.js world-v34.mjs roadster-model.mjs;do curl -fsSI --max-time 8 "http://127.0.0.1:18767/$f" >/dev/null;done
 SWAPPED=0
-printf 'V3.4 (detailed CC-BY mesh and autodrome) deployed; previous release %s\n' "$BACKUP"
+printf 'V3.4.1 (freeze + boundary + mismatched model fix) deployed; previous release %s\n' "$BACKUP"

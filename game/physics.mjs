@@ -1,3 +1,4 @@
+import {WORLD_BOUNDS} from './range.mjs';
 export const GATES = [
   [0, 4, -22], [0, 15, -98], [0, 12, -163], [34, 20, -213],
   [91, 24, -202], [119, 17, -145], [108, 10, -75], [71, 15, -12],
@@ -81,7 +82,7 @@ export function step(s,input,dt){
   if(s.z<-97&&s.z>-139&&Math.abs(s.x)<5&&s.y>3)s.jumpArmed=true;
   if(s.jumpArmed&&s.z<-141&&Math.abs(s.x)<8&&s.y>2){s.jumpArmed=false;if(!s.objectives.jump){s.objectives.jump=true;s.score+=1200;events.push({type:'jump',points:1200});}}
   if(Math.abs(s.x)<3.3&&s.y<1.9&&PARKED.some(z=>Math.abs(z-s.z)<3)&&Math.abs(s.speed)>3){resetPosition(s);events.push({type:'crash'});return events;}
-  if(Math.abs(s.x)>370||Math.abs(s.z)>400){resetPosition(s);events.push({type:'boundary'});return events;}
+  if(s.x<WORLD_BOUNDS.minX||s.x>WORLD_BOUNDS.maxX||s.z<WORLD_BOUNDS.minZ||s.z>WORLD_BOUNDS.maxZ){resetPosition(s);events.push({type:'boundary'});return events;}
   if((s.mode==='trial'||s.mode==='launch')&&s.gate<missionGateCount(s.mode)&&gateCrossed(old,s,s.gate)){
     s.gate++;s.score+=1000;s.air=Math.min(100,s.air+38);events.push({type:'gate',points:1000});
     if(s.gate===missionGateCount(s.mode)){s.completed=true;events.push({type:'finish'});}

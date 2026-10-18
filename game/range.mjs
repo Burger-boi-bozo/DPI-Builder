@@ -34,6 +34,8 @@ export function isPaved(x,z){
 
 // A drivable kilometre-class closed circuit. Its paved mesh, road friction,
 // terrain staging and map read the same control points.
+// Map extents are shared by the playable boundary and the rendered circuit.
+export const WORLD_BOUNDS=Object.freeze({minX:-510,maxX:510,minZ:-610,maxZ:510});
 export const CIRCUIT_POINTS=Object.freeze([
  [94,42],[155,66],[224,28],[306,-65],[316,-182],[294,-311],
  [238,-406],[112,-477],[-34,-460],[-133,-381],[-161,-269],

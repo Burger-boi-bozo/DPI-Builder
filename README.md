@@ -1,4 +1,4 @@
-# V3.4 — Visual and Map Rebuild (2026-10-17)
+# V3.4.1 — Visual and Map Rebuild (2026-10-17)
 
 The visual and map upgrade supersedes the old garage-blockout release. The car is a detailed licensed Roadster 2020 GLB (CC BY 4.0), with four independently animated, articulated hub pivots. The shared wheel-order bug (FL, RL, FR, RR versus physics FL, FR, RL, RR) was corrected in both the fallback and imported wheel pipeline.
 
@@ -134,3 +134,10 @@ New ground-vehicle dynamics include tire-temperature and load-sensitive grip, a 
 - Actual WebGL GPU rendering remains unverified in the test sandbox. The model and coefficients remain fictional and should **not** be used for Roadster engineering or vehicle safety predictions.
 
 See [`PHYSICS_ENGINE.md`](PHYSICS_ENGINE.md) for system equations, invariants and remaining accuracy limits.
+
+
+### V3.4.1 stability hotfix
+- Fixed frozen gameplay after imported GLB initialization (missing `driveVisualWheelRig` runtime import).
+- Expanded out-of-range bounds so the entire autodrome is playable without infinite resets.
+- Defaulted to the concept study mesh, not the outdated and incorrectly identified 2020 Roadster. The 2020 CC-BY mesh is kept for explicit QA via `?legacy-roadster=2020`. Exact October 2026 Rocket CAD is not currently available.
+- Added a browser regression that mounts a mock four-hub model after starting; its active clock must continue increasing.

@@ -297,7 +297,14 @@ export function createScene(container){
   });
   const car=makeCar();scene.add(car);
   // Import the CC-BY Roadster asynchronously; fallback remains usable on error.
-  const visualPromise=upgradeRoadsterVisual(T,car,{onStatus:value=>{const el=document.getElementById("modelQuality");if(el)el.textContent=value;}});
+  // The 2020 Roadster model is not the October 2026 Rocket prototype. Do not
+  // silently present it as the requested model. It remains accessible solely
+  // for licensed-asset QA with ?legacy-roadster=2020 while a matching model
+  // is being developed from current reference material.
+  const use2020Model=typeof location!=='undefined' && new URLSearchParams(location.search).get('legacy-roadster')==='2020';
+  const qualityBadge=typeof document!=='undefined'?document.getElementById('modelQuality'):null;
+  if(qualityBadge)qualityBadge.textContent=use2020Model?'LOADING LEGACY ROADSTER':'ROCKET PROTOTYPE · CONCEPT MODEL';
+  const visualPromise=use2020Model?upgradeRoadsterVisual(T,car,{onStatus:value=>{if(qualityBadge)qualityBadge.textContent=value;}}):Promise.resolve(false);
   // Experimental-flight propulsion: no flames for cold-gas jets. The inner
   // nozzles pulse with pressure; cones of vapor are spawned in game.mjs.
   const jetMaterial=new T.MeshBasicMaterial({color:0x9ce9ff,transparent:true,opacity:0,depthWrite:false,blending:T.AdditiveBlending});

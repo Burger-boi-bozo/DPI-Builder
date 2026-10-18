@@ -1,5 +1,6 @@
 import {PROVING_ROUTES,SLALOM_PYLONS,WET_PATCH,CIRCUIT_POINTS} from './range.mjs';
 import {createScene} from './scene.mjs';
+import {driveVisualWheelRig} from './roadster-model.mjs';
 import {createState,step,resetPosition,GATES,LOOP,clamp,heightAt,missionGateCount} from './physics.mjs';
 import {makeResearchState,stepResearch,RESEARCH_STAGES,setPrecision,makeDynamicsState} from './research.mjs?v=3.3.0';
 import {createSuspension,suspensionStep,SUSPENSION,CHASSIS_SETUPS,setChassisSetup,setChassisAdjustment,tuningParameters} from './suspension.mjs?v=3.3.0';
