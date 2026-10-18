@@ -1,5 +1,5 @@
 import * as T from './three.module.min.js';
-import {WHEELS} from './physics.mjs?v=1.2.1';
+import {WHEELS} from './physics.mjs?v=1.2.2';
 const vec=p=>new T.Vector3(...p);
 export function buildVehicle(){
   const root=new T.Group();
@@ -19,6 +19,7 @@ export function buildVehicle(){
   const tube=(points,r,mat,parent=root,segments=36)=>mesh(new T.TubeGeometry(new T.CatmullRomCurve3(points.map(vec)),segments,r,5,false),mat,parent);
   const sections=[[-2.32,.81,.10],[-2.16,.94,.16],[-1.70,.99,.25],[-1.43,1.0,.28],[-.98,.965,.28],[-.55,.92,.29],[0,.93,.30],[.6,.96,.32],[1.10,1.01,.34],[1.43,1.035,.34],[1.85,1.02,.32],[2.28,.97,.29]];
   const profile=z=>{let i=0;while(i<sections.length-2&&z>sections[i+1][0])i++;const a=sections[i],b=sections[i+1],t=T.MathUtils.smoothstep(z,a[0],b[0]);return [T.MathUtils.lerp(a[1],b[1],t),T.MathUtils.lerp(a[2],b[2],t)];};
+  const hoodPoint=(x,z,lift=.005)=>{const [width,top]=profile(z),t=Math.abs(x)/width,shoulder=Math.exp(-Math.pow((Math.abs(z)-1.43)/.52,2))*.10;return [x,top+shoulder*t**3-.045*t**10+lift,z];};
   // Fine surface tessellation retains sharp design creases at the hood and shoulders.
   for(const sign of [-1,1]){
     const positions=[],uvs=[],indices=[],N=140,M=12;
@@ -39,9 +40,9 @@ export function buildVehicle(){
     tube([[sign*.78,.305,-.84],[sign*.68,.709,-.05],[sign*.70,.739,.64],[sign*.87,.35,1.45]],.016,paint);
     tube([[sign*.695,.725,.60],[sign*.82,.34,.76]],.014,carbon);
     // Headlight blades follow the triangular fender opening.
-    panel([[sign*.91,.202,-1.99],[sign*.70,.17,-2.14],[sign*.76,.27,-1.79]],black);
-    tube([[sign*.91,.209,-1.99],[sign*.756,.253,-1.865]],.014,white,root,12);
-    for(let i=0;i<4;i++)box([.018,.018,.06],[sign*(.78+i*.029),.235-i*.006,-1.90-i*.018],white);
+    panel([hoodPoint(sign*.91,-1.99),hoodPoint(sign*.70,-2.14),hoodPoint(sign*.76,-1.79)],black);
+    tube([hoodPoint(sign*.90,-1.99,.014),hoodPoint(sign*.756,-1.865,.014)],.011,white,root,12);
+    for(let i=0;i<4;i++){const x=sign*(.78+i*.025),z=-1.92-i*.019;tube([hoodPoint(x,z,.012),hoodPoint(x,z-.026,.012)],.007,white,root,4);}
     box([.023,.015,.16],[sign*.969,.22,-.91],new T.MeshStandardMaterial({color:0xc88b36,emissive:0x7d3511}));
   }
   // Faceted hood centre, front intake and splitter.
@@ -69,7 +70,11 @@ export function buildVehicle(){
   const plateCanvas=document.createElement('canvas');plateCanvas.width=512;plateCanvas.height=128;const ctx=plateCanvas.getContext('2d');ctx.fillStyle='#11151c';ctx.fillRect(0,0,512,128);ctx.strokeStyle='#7e8795';ctx.lineWidth=4;ctx.strokeRect(4,4,504,120);ctx.font='48px sans-serif';ctx.textAlign='center';ctx.fillStyle='#d3dae5';ctx.fillText('R O A D S T E R',256,82);const plate=new T.CanvasTexture(plateCanvas);plate.colorSpace=T.SRGBColorSpace;
   const plateMesh=mesh(new T.PlaneGeometry(.49,.12),new T.MeshStandardMaterial({map:plate,roughness:.5}));plateMesh.position.set(0,.077,2.307);plateMesh.rotation.y=0;
   // Interior includes two bucket seats, dash, a live instrument panel and yoke.
-  const interior=new T.Group();root.add(interior);box([1.68,.14,1.90],[0,-.25,.10],black,interior);box([1.47,.15,.28],[0,.16,-.58],carbon,interior);
+  const interior=new T.Group();root.add(interior);box([1.68,.14,1.90],[0,-.25,.10],black,interior);box([1.56,.22,.30],[0,.12,-.58],carbon,interior);
+  // A closed firewall and inner door skins keep the wheel wells outside the cabin.
+  panel([[-.82,-.24,-.78],[.82,-.24,-.78],[.82,.30,-.78],[-.82,.30,-.78]],carbon,interior);
+  panel([[-.82,.30,-.80],[.82,.30,-.80],[.77,.23,-.42],[-.77,.23,-.42]],carbon,interior);
+  for(const side of [-1,1]){panel([[side*.79,.30,-.79],[side*.86,.34,.87],[side*.83,-.25,.87],[side*.79,-.25,-.79]],black,interior);box([.09,.065,.62],[side*.76,.07,.05],carbon,interior);tube([[side*.78,.245,-.62],[side*.82,.27,.68]],.004,aluminum,interior);}
   for(const x of [-.39,.39]){box([.42,.12,.48],[x,-.14,.16],black,interior);const seat=box([.41,.56,.12],[x,.1,.43],black,interior);seat.rotation.x=-.14;for(const side of [-1,1]){const bolster=box([.07,.45,.18],[x+side*.22,.05,.38],carbon,interior);bolster.rotation.z=-side*.1;}box([.24,.18,.10],[x,.45,.43],black,interior);tube([[x-.12,.42,.34],[x-.12,-.05,.08]],.019,new T.MeshStandardMaterial({color:0x7356a6,roughness:1}),interior);}
   box([.21,.10,.87],[0,-.04,.13],carbon,interior);
   const dashboard=document.createElement('canvas');dashboard.width=512;dashboard.height=256;const dashTexture=new T.CanvasTexture(dashboard);dashTexture.colorSpace=T.SRGBColorSpace;const screen=mesh(new T.PlaneGeometry(.40,.20),new T.MeshBasicMaterial({map:dashTexture}),interior);screen.position.set(-.38,.285,-.53);screen.rotation.y=0;screen.rotation.x=-.15;

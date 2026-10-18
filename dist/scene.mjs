@@ -1,6 +1,6 @@
 import * as T from './three.module.min.js';
-import {buildVehicle} from './vehicle.mjs?v=1.2.1';
-import {GATES,OBSTACLES,surfaceAt,terrainHeight} from './physics.mjs?v=1.2.1';
+import {buildVehicle} from './vehicle.mjs?v=1.2.2';
+import {GATES,OBSTACLES,surfaceAt,terrainHeight} from './physics.mjs?v=1.2.2';
 import {RGBELoader} from './RGBELoader.mjs';
 const V=(x=0,y=0,z=0)=>new T.Vector3(x,y,z);
 function random(seed=1257){return()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};}

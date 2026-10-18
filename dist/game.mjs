@@ -1,6 +1,6 @@
-import {createState,step,resetPosition,toggleHold,GATES,PARAMS,clamp} from './physics.mjs?v=1.2.1';
-import {createScene} from './scene.mjs?v=1.2.1';
-import {VehicleAudio} from './audio.mjs?v=1.2.1';
+import {createState,step,resetPosition,toggleHold,GATES,PARAMS,clamp} from './physics.mjs?v=1.2.2';
+import {createScene} from './scene.mjs?v=1.2.2';
+import {VehicleAudio} from './audio.mjs?v=1.2.2';
 const $=id=>document.getElementById(id);
 const defaults={quality:'balanced',weather:'day',paint:'#b9c1cf',assist:true,unlimited:true,motion:false,guide:true};
 const read=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))||fallback;}catch{return fallback;}};
