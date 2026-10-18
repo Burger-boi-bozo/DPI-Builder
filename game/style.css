@@ -211,3 +211,9 @@
 .solver-grid b{display:block;margin-top:5px;color:#eafffe;font:650 14px ui-monospace,monospace;font-variant-numeric:tabular-nums}
 .solver-details p{font-size:9px;line-height:1.5;color:#9cb9c7;margin:0;padding:0 12px 12px}
 @media(max-width:760px){.solver-details summary{padding:10px;font-size:9px}.solver-grid b{font-size:12px}}
+
+/* V3.4 production asset indicator and nonintrusive license attribution */
+.visual-quality{display:inline-block;padding:4px 7px;border:1px solid #99e5c35c;border-radius:5px;color:#b6f5d8;font-size:8px;letter-spacing:.06em;white-space:nowrap}
+.asset-credit{position:fixed;z-index:20;right:12px;bottom:4px;font:9px ui-sans-serif,sans-serif;color:#acbfce;background:#07121eb3;border-radius:5px;padding:4px 7px;pointer-events:auto;max-width:74vw}
+.asset-credit a{color:#c2e5f6}
+@media(max-width:780px){.asset-credit{font-size:7px}.visual-quality{display:none}}

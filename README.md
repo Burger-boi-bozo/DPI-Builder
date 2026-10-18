@@ -1,3 +1,15 @@
+# V3.4 — Visual and Map Rebuild (2026-10-17)
+
+The visual and map upgrade supersedes the old garage-blockout release. The car is a detailed licensed Roadster 2020 GLB (CC BY 4.0), with four independently animated, articulated hub pivots. The shared wheel-order bug (FL, RL, FR, RR versus physics FL, FR, RL, RR) was corrected in both the fallback and imported wheel pipeline.
+
+The West Texas Engineering Autodrome is a closed course with smooth curves, painted curbs, road lamps, roadside structures, desert landscape, solar research roofs, and a wind-tunnel test compound. The original flight and suspension courses remain.
+
+The GLB, GLTFLoader, Draco decoder and geometry utilities are downloaded by `deploy/install-on-proxmox.sh` using pinned HTTPS sources and verified SHA-256 digests, with a repeatable local cache. An offline unlicensed procedural fallback remains if the detailed model fails. A fresh server deployment requires internet access to fetch first-time assets. Attribution and license details are in `game/ASSET_CREDITS.md`.
+
+A near-BeamNG node-beam soft-body physics engine has **not** been implemented. The current dynamics are an advanced rigid-body plus four-hub model with tire/brake/EV/thruster subsystems. True deformable collisions and OEM-calibrated parts are ongoing research. The model is a 3D artist's CC BY model, not engineering CAD. Final GPU-rendered browser visual QA is not verified in this execution environment.
+
+---
+
 # Roadster X-Flight — Experimental Flight Lab V3.3
 
 A self-hosted, original experimental-flight concept built on the recovered Roadster Flight Lab V1. This is **not** a physics-validated Tesla Roadster representation. Thruster characteristics, mass, aerodynamics, structural/thermal limits, and safety systems are hypothetical parameters designed for a playable R&D simulator. Not affiliated with Tesla or SpaceX.

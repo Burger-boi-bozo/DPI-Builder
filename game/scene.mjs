@@ -3,6 +3,8 @@ import {surfaceAt} from './suspension.mjs';
 import * as T from './three.module.min.js';
 import {GATES,LOOP,PARKED} from './physics.mjs';
 import {RESEARCH_STAGES} from './research.mjs';
+import {createAutodrome} from './world-v34.mjs';
+import {upgradeRoadsterVisual} from './roadster-model.mjs';
 
 const mat=(color,roughness=.65,metalness=0)=>new T.MeshStandardMaterial({color,roughness,metalness});
 const rubber=mat(0x10151c,.9),metal=mat(0x8c97a5,.23,.85),dark=mat(0x111b27,.35,.5);
@@ -118,7 +120,7 @@ export function makeCar(color=0xdfe6ea,simple=false){
     box(body,.02,.012,.042,carbonDetail,side*(.54+i*.052),.84,-2.25+i*.01);
   }
   const wheels=[],springs=[],brakeRotors=[];
-  for(const x of [-1.08,1.08])for(const z of [-1.48,1.45]){
+  for(const z of [-1.48,1.45])for(const x of [-1.08,1.08]){
     const wheel=new T.Group();wheel.position.set(x,.45,z);body.add(wheel);
     const tire=mesh(new T.CylinderGeometry(.45,.45,.35,24),rubber,wheel);tire.rotation.z=Math.PI/2;
     const rim=mesh(new T.CylinderGeometry(.31,.31,.37,24),dark,wheel);rim.rotation.z=Math.PI/2;
@@ -177,7 +179,7 @@ export function makeCar(color=0xdfe6ea,simple=false){
       controlLinks.push({mesh:segment,corner:i,sx,z,tier,fore});
     }
   }
-  group.userData={body,wheels,springs,brakeLamp,brakeRotors,steerWheel,controlLinks};return group;
+  group.userData={body,wheels,springs,brakeLamp,brakeRotors,steerWheel,controlLinks,visualWheelOrder:["FL","FR","RL","RR"]};return group;
 }
 export function makeLabel(text,color='#dce8ff',w=512,h=96){
   const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d');
@@ -210,7 +212,7 @@ export function createScene(container){
   const reflectScene=new T.Scene();reflectScene.add(sky.clone());reflectScene.add(new T.HemisphereLight(0xdcecff,0x625a5c,2));
   const pmrem=new T.PMREMGenerator(renderer);const env=pmrem.fromScene(reflectScene,.1,1,1600);scene.environment=env.texture;pmrem.dispose();
   const terrain=new T.PlaneGeometry(2000,2000,80,80);terrain.rotateX(-Math.PI/2);
-  const pos=terrain.attributes.position;for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i);const strength=Math.min(1,Math.max(0,(Math.hypot(x,z)-260)/160));pos.setY(i,-.13+strength*(Math.sin(x*.014)*Math.cos(z*.01)*13+Math.sin(z*.039)*3));}terrain.computeVertexNormals();
+  const pos=terrain.attributes.position;for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i);const strength=Math.min(1,Math.max(0,(Math.hypot(x,z)-520)/140));pos.setY(i,-.13+strength*(Math.sin(x*.014)*Math.cos(z*.01)*13+Math.sin(z*.039)*3));}terrain.computeVertexNormals();
   const sand=mat(0xa39b90,.98);sand.map=surfaceNoise(205,39,71);sand.needsUpdate=true;mesh(terrain,sand,scene).receiveShadow=true;
   const roadMat=mat(0x676d76,.9,.06),edgeMat=mat(0xa1a6ad,.9),lineMat=mat(0xe2dfca,.8);roadMat.map=surfaceNoise(168,27,19);roadMat.needsUpdate=true;
   box(scene,24,.10,480,roadMat,0,-.035,-90);
@@ -294,13 +296,15 @@ export function createScene(container){
     gateGroup.add(g);return {group:g,ring,outer,number};
   });
   const car=makeCar();scene.add(car);
+  // Import the CC-BY Roadster asynchronously; fallback remains usable on error.
+  const visualPromise=upgradeRoadsterVisual(T,car,{onStatus:value=>{const el=document.getElementById("modelQuality");if(el)el.textContent=value;}});
   // Experimental-flight propulsion: no flames for cold-gas jets. The inner
   // nozzles pulse with pressure; cones of vapor are spawned in game.mjs.
   const jetMaterial=new T.MeshBasicMaterial({color:0x9ce9ff,transparent:true,opacity:0,depthWrite:false,blending:T.AdditiveBlending});
   const vehicleJets=[];
   for(const x of [-.83,.83])for(const z of [-1.42,1.48]){
     const core=mesh(new T.ConeGeometry(.22,1.35,16),jetMaterial.clone(),car.userData.body,x,-.21,z);
-    core.rotation.z=Math.PI;core.castShadow=false;core.receiveShadow=false;vehicleJets.push(core);
+    core.rotation.z=Math.PI;core.castShadow=false;core.receiveShadow=false;core.userData.keepWhenRealModel=true;vehicleJets.push(core);
   }
   // Suspension dynamics track: raised concrete, washboard and asymmetric wheel rut.
   // Geometry samples exactly the same physical height function as the four tire contacts.
@@ -326,6 +330,7 @@ export function createScene(container){
     const sign=makeLabel(z>0?'DAMPER / IMPULSE':z>-67?'WASHBOARD / COMPLIANCE':'CROSS-AXLE / RUT','#ffedcf');
     sign.position.set(78,2,z);sign.scale.set(16,3.2,1);scene.add(sign);
   }
+  const autodrome=createAutodrome(T,scene);
   // Research campus: an illuminated lift platform, sensor gantries, a
   // crosswind calibration corridor and a precision touchdown pad.
   const researchGroup=new T.Group();scene.add(researchGroup);researchGroup.visible=false;
@@ -492,5 +497,5 @@ export function createScene(container){
   let cursor=0;
   function emit(at,velocity,color=0xcde9ff){const id=cursor++%particleCount;const p=particles[id];p.life=.45+Math.random()*.5;p.v.copy(velocity);particlePositions.set([at.x,at.y,at.z],id*3);const col=new T.Color(color);particleColors.set([col.r,col.g,col.b],id*3);}
   function updateParticles(dt){for(let i=0;i<particleCount;i++){const p=particles[i];if(p.life<=0)continue;p.life-=dt;particlePositions[i*3]+=p.v.x*dt;particlePositions[i*3+1]+=p.v.y*dt;particlePositions[i*3+2]+=p.v.z*dt;p.v.multiplyScalar(1-dt*.8);if(p.life<=0)particlePositions[i*3+1]=-999;}pg.attributes.position.needsUpdate=true;pg.attributes.color.needsUpdate=true;}
-  return {T,scene,renderer,camera,car,ghost,gates,gateGroup,sun,shadow,emit,updateParticles,stampSkids,resetSkids,setGhostPose,setEnvironment,setResearchPhase,updateResearchScene,setVehicleEffects};
+  return {T,scene,renderer,camera,car,ghost,gates,gateGroup,sun,shadow,autodrome,visualPromise,emit,updateParticles,stampSkids,resetSkids,setGhostPose,setEnvironment,setResearchPhase,updateResearchScene,setVehicleEffects};
 }

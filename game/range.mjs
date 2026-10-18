@@ -31,3 +31,20 @@ export function isPaved(x,z){
  ||(Math.abs(z-p.connector.z)<p.connector.width/2&&x>=p.connector.x0&&x<=p.connector.x1)
  ||(Math.abs(Math.hypot(x-p.skidpad.x,z-p.skidpad.z)-p.skidpad.radius)<p.skidpad.width/2);
 }
+
+// A drivable kilometre-class closed circuit. Its paved mesh, road friction,
+// terrain staging and map read the same control points.
+export const CIRCUIT_POINTS=Object.freeze([
+ [94,42],[155,66],[224,28],[306,-65],[316,-182],[294,-311],
+ [238,-406],[112,-477],[-34,-460],[-133,-381],[-161,-269],
+ [-150,-129],[-100,-31],[-10,31]
+].map(p=>Object.freeze(p)));
+export function circuitDistance(x,z){
+ let best=Infinity;
+ for(let j=0;j<CIRCUIT_POINTS.length;j++){
+  const a=CIRCUIT_POINTS[j],b=CIRCUIT_POINTS[(j+1)%CIRCUIT_POINTS.length];
+  const dx=b[0]-a[0],dz=b[1]-a[1],t=Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/(dx*dx+dz*dz)));
+  best=Math.min(best,Math.hypot(x-a[0]-dx*t,z-a[1]-dz*t));
+ }
+ return best;
+}

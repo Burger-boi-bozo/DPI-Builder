@@ -1,4 +1,4 @@
-import {PROVING_ROUTES,SLALOM_PYLONS,WET_PATCH} from './range.mjs';
+import {PROVING_ROUTES,SLALOM_PYLONS,WET_PATCH,CIRCUIT_POINTS} from './range.mjs';
 import {createScene} from './scene.mjs';
 import {createState,step,resetPosition,GATES,LOOP,clamp,heightAt,missionGateCount} from './physics.mjs';
 import {makeResearchState,stepResearch,RESEARCH_STAGES,setPrecision,makeDynamicsState} from './research.mjs?v=3.3.0';
@@ -259,6 +259,9 @@ function initialize(w){
    const p0=p(0,-310);ctx.fillRect(p0[0]-8,p0[1],16,480*scale);const p1=p(-145,32);ctx.fillRect(p1[0],p1[1]-5,290*scale,10);const p2=p(LOOP.x,-165);ctx.fillRect(p2[0]-5,p2[1],10,255*scale);
    ctx.strokeStyle='#a9bbcf20';ctx.lineWidth=1;for(let x=20;x<320;x+=28){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,240);ctx.stroke();}for(let y=0;y<240;y+=28){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(320,y);ctx.stroke();}
    if(dynamics){
+     // The screen map uses the same closed circuit points as the rendered world.
+     ctx.strokeStyle='#b7ebef88';ctx.lineWidth=15*scale;ctx.lineJoin='round';ctx.beginPath();
+     CIRCUIT_POINTS.forEach(([x,z],i)=>{const xy=p(x,z);i?ctx.lineTo(...xy):ctx.moveTo(...xy);});ctx.closePath();ctx.stroke();ctx.lineWidth=1;
      const r=PROVING_ROUTES;
      const paintTrack=(x,z,w,h)=>{const a=p(x,z);ctx.fillRect(a[0]-w*scale/2,a[1]-h*scale/2,w*scale,h*scale);};
      ctx.fillStyle='#7b9caa65';
@@ -290,6 +293,11 @@ function initialize(w){
        piston.position.y=-.35+travel*.35;spring.position.y=-.16+travel*.18;
        spring.scale.set(1,1,Math.max(.65,1-travel*.8));
      });
+     if(car.userData.importedWheelRig){
+       driveVisualWheelRig(T,car.userData.importedWheelRig,
+         steeringAngles(state.drivetrain?.steerAngle||0),
+         suspension.wheelCamber,suspension.hubDisplacement||suspension.wheelTravel,suspension.wheelSpin);
+     }
      const steerRack=state.drivetrain?.steerAngle||0;
      if(car.userData.steerWheel)car.userData.steerWheel.rotation.z=-steerRack*2.4;
      const localUp=new T.Vector3(0,1,0),startArm=new T.Vector3(),endArm=new T.Vector3(),axis=new T.Vector3();

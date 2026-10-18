@@ -45,3 +45,7 @@ This system remains **3-axis attitude dynamics plus simplified 3D translational 
 ## Unfinished engineering work
 
 True three-dimensional articulated suspension links, accurate 6-DOF contact/collision impulses, tire force curves fitted to telemetry, real chassis/body CAD, OEM motor inverter maps, wind-tunnel calibration, actual LiDAR road traces, structural deformation, and end-to-end GPU visual validation are pending. The simulator cannot honestly claim roadworthiness, aerospace-grade accuracy, or photorealism.
+
+## V3.4 visual/physics coupling
+
+Fixed visual wheel index ordering to agree with the FL/FR/RL/RR physics ordering. Imported CC-BY mesh hubs are linked to the existing steering Ackermann angles, camber and hub travel; this does not add soft-body collisions. The new grade-level autodrome is a visual terrain with grade-0 contact simulation. Certified physical validation remains a separate task.
