@@ -59,3 +59,13 @@ altitude hold with fuel exhaustion, combo limits, recovery guidance, and medals.
 No build or npm installation is needed. Serve `dist/`; all runtime dependencies
 and fonts are included. `dist/release.json` identifies this release. Fonts retain
 the SIL Open Font License in `dist/FONTS-OFL-1.1.txt`.
+
+### Existing Proxmox deployment
+
+On the DPI host, clone branch `roadster-flight-v1` to
+`/opt/roadster-flight-v1`, then run `python3 deploy/install-v1.py` as root.
+The installer checks the known tunnel configuration, validates the candidate,
+backs up the original, and adds only the `/v1/` route. It runs a separate local
+static server on port 18768 and leaves the main game on port 18767. A failed
+public verification restores the previous tunnel configuration. The service
+starts automatically after reboot. All source and runtime assets are tracked.
