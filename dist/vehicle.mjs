@@ -1,5 +1,5 @@
 import * as T from './three.module.min.js';
-import {WHEELS} from './physics.mjs';
+import {WHEELS} from './physics.mjs?v=1.2.1';
 const vec=p=>new T.Vector3(...p);
 export function buildVehicle(){
   const root=new T.Group();
