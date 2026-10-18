@@ -1,5 +1,5 @@
 import * as T from './three.module.min.js';
-import {GATES,LOOP,PARKED} from './physics.mjs?v=1.1.0';
+import {GATES,LOOP,PARKED} from './physics.mjs?v=1.1.1';
 
 const mat=(color,roughness=.65,metalness=0)=>new T.MeshStandardMaterial({color,roughness,metalness});
 const rubber=mat(0x10151c,.9),metal=mat(0x8c97a5,.23,.85),dark=mat(0x111b27,.35,.5);
@@ -83,7 +83,7 @@ export function createScene(container){
   scene.add(new T.HemisphereLight(0xb3d6ff,0x6c5241,2.25));
   const sun=new T.DirectionalLight(0xffdfb9,3.3);sun.position.set(-80,110,-75);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-85,right:85,top:85,bottom:-85,near:1,far:300});sun.shadow.bias=-.00025;sun.shadow.normalBias=.03;scene.add(sun);scene.add(sun.target);
   const reflectScene=new T.Scene();reflectScene.add(sky.clone());reflectScene.add(new T.HemisphereLight(0xdcecff,0x625a5c,2));
-  const pmrem=new T.PMREMGenerator(renderer);const env=pmrem.fromScene(reflectScene,.1,1,1600);scene.environment=env.texture;pmrem.dispose();
+  const pmrem=new T.PMREMGenerator(renderer);const env=pmrem.fromScene(reflectScene,.03,1,1600);scene.environment=env.texture;pmrem.dispose();
   const terrain=new T.PlaneGeometry(2000,2000,80,80);terrain.rotateX(-Math.PI/2);
   const pos=terrain.attributes.position;for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i);const strength=Math.min(1,Math.max(0,(Math.hypot(x,z)-260)/160));pos.setY(i,-.13+strength*(Math.sin(x*.014)*Math.cos(z*.01)*13+Math.sin(z*.039)*3));}terrain.computeVertexNormals();
   mesh(terrain,mat(0x9b8d80,.96),scene).receiveShadow=true;

@@ -1,5 +1,5 @@
-import {createScene} from './scene.mjs?v=1.1.0';
-import {createState,step,resetPosition,GATES,LOOP,clamp,heightAt,toggleAltitudeHold,gateNavigation,medalFor} from './physics.mjs?v=1.1.0';
+import {createScene} from './scene.mjs?v=1.1.1';
+import {createState,step,resetPosition,GATES,LOOP,clamp,heightAt,toggleAltitudeHold,gateNavigation,medalFor} from './physics.mjs?v=1.1.1';
 
 const $=id=>document.getElementById(id);
 let world;
