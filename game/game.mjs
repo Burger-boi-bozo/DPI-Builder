@@ -1,8 +1,9 @@
+import {PROVING_ROUTES,SLALOM_PYLONS,WET_PATCH} from './range.mjs';
 import {createScene} from './scene.mjs';
 import {createState,step,resetPosition,GATES,LOOP,clamp,heightAt,missionGateCount} from './physics.mjs';
 import {makeResearchState,stepResearch,RESEARCH_STAGES,setPrecision,makeDynamicsState} from './research.mjs';
 import {createSuspension,suspensionStep,SUSPENSION,CHASSIS_SETUPS,setChassisSetup,setChassisAdjustment,tuningParameters} from './suspension.mjs?v=3.0.0';
-import {makeVehicleDynamics} from './vehicle.mjs';
+import {makeVehicleDynamics,steeringAngles} from './vehicle.mjs';
 import {createOrbitState,orbitDrag,orbitPan,orbitZoom,orbitPose,resetOrbit} from './orbit.mjs?v=3.0.0';
 
 const $=id=>document.getElementById(id);
@@ -30,6 +31,7 @@ function initialize(w){
  const progressDots=GATES.map(()=>{const i=document.createElement('i');$('missionProgress').appendChild(i);return i;});
  const ctx=$('minimap').getContext('2d');
  let audioContext,engine,engineGain,gasGain,soundEnabled=false;
+ let lastGamepadActive=false;
  function initAudio(){if(audioContext)return;try{audioContext=new(window.AudioContext||window.webkitAudioContext)();engine=audioContext.createOscillator();engine.type='sine';engineGain=audioContext.createGain();engineGain.gain.value=0;engine.connect(engineGain).connect(audioContext.destination);engine.start();const noise=audioContext.createBuffer(1,audioContext.sampleRate*2,audioContext.sampleRate);const data=noise.getChannelData(0);for(let i=0;i<data.length;i++)data[i]=Math.random()*2-1;const source=audioContext.createBufferSource();source.buffer=noise;source.loop=true;const filter=audioContext.createBiquadFilter();filter.type='lowpass';filter.frequency.value=1900;gasGain=audioContext.createGain();gasGain.gain.value=0;source.connect(filter).connect(gasGain).connect(audioContext.destination);source.start();}catch{soundEnabled=false;}}
  function tone(freq=600,length=.12){if(!soundEnabled||!audioContext)return;const o=audioContext.createOscillator(),g=audioContext.createGain();o.type='sine';o.frequency.setValueAtTime(freq,audioContext.currentTime);o.frequency.exponentialRampToValueAtTime(freq*1.45,audioContext.currentTime+length);g.gain.setValueAtTime(.065,audioContext.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioContext.currentTime+length);o.connect(g).connect(audioContext.destination);o.start();o.stop(audioContext.currentTime+length);}
  function cycleEnvironment(){environmentIndex=(environmentIndex+1)%3;const label=w.setEnvironment(environmentIndex);$('environmentButton').textContent=label;displayCallout(label,'LIGHTING PROFILE UPDATED',1.2);try{localStorage.setItem('roadster-v2-lighting',String(environmentIndex));}catch{}}
@@ -131,7 +133,7 @@ function initialize(w){
    if(d&&state.mode==='dynamics'){
       $('driveSoc').textContent=d.soc.toFixed(1)+'%';
       $('drivePower').textContent=(d.powerKw-d.regenKw).toFixed(0)+' kW';
-      $('driveSteer').textContent=(d.steerAngle*180/Math.PI).toFixed(1)+'°';
+      $('driveSteer').textContent=(d.steerAngle*180/Math.PI).toFixed(1)+'°';$('driveSteer').style.color=Math.abs(d.steerAngle)>.05?'#a2f3e5':'';
       $('driveSlip').textContent=(Math.atan2(d.velocityLateral,Math.max(2,Math.abs(d.velocityForward)))*180/Math.PI).toFixed(1)+'°';
       $('driveTire').textContent=(d.tireTemperature.reduce((a,b)=>a+b,0)/4).toFixed(0)+'°C';
       $('driveBrake').textContent=(d.brakeTemperature.reduce((a,b)=>a+b,0)/4).toFixed(0)+'°C';
@@ -242,9 +244,21 @@ function initialize(w){
    replayElapsed=0;replayIndex=0;replayPlaying=true;cameraMode=2;setPhase('replay');clearKeys();w.setResearchPhase(true,0);w.setGhostPose(null);setReplayFrame();positionCamera(1,true);
  }
  function drawMap(){
-   const cx=160,cz=130,scale=.7;const p=(x,z)=>[cx+x*scale,cz+(z+85)*scale];ctx.clearRect(0,0,320,240);ctx.fillStyle='#b5c6db12';
+   const dynamics=state.mode==='dynamics',cx=160,cz=130,scale=dynamics?1.0:.7;
+   const p=(x,z)=>dynamics?[cx+(x-state.x)*scale,cz+(z-state.z)*scale]:[cx+x*scale,cz+(z+85)*scale];ctx.clearRect(0,0,320,240);ctx.fillStyle='#b5c6db12';
    const p0=p(0,-310);ctx.fillRect(p0[0]-8,p0[1],16,480*scale);const p1=p(-145,32);ctx.fillRect(p1[0],p1[1]-5,290*scale,10);const p2=p(LOOP.x,-165);ctx.fillRect(p2[0]-5,p2[1],10,255*scale);
    ctx.strokeStyle='#a9bbcf20';ctx.lineWidth=1;for(let x=20;x<320;x+=28){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,240);ctx.stroke();}for(let y=0;y<240;y+=28){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(320,y);ctx.stroke();}
+   if(dynamics){
+     const r=PROVING_ROUTES;
+     const paintTrack=(x,z,w,h)=>{const a=p(x,z);ctx.fillRect(a[0]-w*scale/2,a[1]-h*scale/2,w*scale,h*scale);};
+     ctx.fillStyle='#7b9caa65';
+     paintTrack(r.damper.x,(r.damper.z0+r.damper.z1)/2,r.damper.halfWidth*2,r.damper.z0-r.damper.z1);
+     paintTrack(r.slalom.x,(r.slalom.z0+r.slalom.z1)/2,r.slalom.halfWidth*2,r.slalom.z0-r.slalom.z1);
+     paintTrack((r.connector.x0+r.connector.x1)/2,r.connector.z,r.connector.x1-r.connector.x0,r.connector.width);
+     const circle=p(r.skidpad.x,r.skidpad.z);ctx.lineWidth=10*scale;ctx.strokeStyle='#7b9caa65';ctx.beginPath();ctx.arc(circle[0],circle[1],r.skidpad.radius*scale,0,Math.PI*2);ctx.stroke();ctx.lineWidth=1;
+     const wet=p((WET_PATCH.x0+WET_PATCH.x1)/2,(WET_PATCH.z0+WET_PATCH.z1)/2);ctx.fillStyle='#70c6ec99';ctx.fillRect(wet[0]-10*scale,wet[1]-14*scale,20*scale,29*scale);
+     ctx.fillStyle='#ffb28a';for(const marker of SLALOM_PYLONS){const pt=p(marker.x,marker.z);ctx.beginPath();ctx.arc(pt[0],pt[1],2.4,0,Math.PI*2);ctx.fill();}
+   }
    const lp=p(LOOP.x,LOOP.z);ctx.strokeStyle='#c4a7ff88';ctx.beginPath();ctx.arc(lp[0],lp[1],7,0,Math.PI*2);ctx.stroke();
    if(state.mode==='trial'||state.mode==='launch'){ctx.strokeStyle='#c4a7ff40';ctx.setLineDash([3,5]);ctx.beginPath();GATES.slice(0,missionGateCount(state.mode)).forEach((g,i)=>{const pos=p(g[0],g[2]);i?ctx.lineTo(...pos):ctx.moveTo(...pos);});ctx.stroke();ctx.setLineDash([]);GATES.slice(0,missionGateCount(state.mode)).forEach((g,i)=>{const pos=p(g[0],g[2]);ctx.fillStyle=i<state.gate?'#7e8c9a':i===state.gate?'#e4ff95':'#b6a2e766';ctx.beginPath();ctx.arc(...pos,i===state.gate?5:2.5,0,Math.PI*2);ctx.fill();});}
    const pos=p(state.x,state.z);ctx.save();ctx.translate(clamp(pos[0],8,312),clamp(pos[1],8,232));ctx.rotate(-state.yaw);ctx.fillStyle='#ffffff';ctx.beginPath();ctx.moveTo(0,-7);ctx.lineTo(-4.5,5);ctx.lineTo(0,2);ctx.lineTo(4.5,5);ctx.closePath();ctx.fill();ctx.restore();
@@ -261,11 +275,21 @@ function initialize(w){
      if(car.userData.springs)car.userData.springs.forEach(({carrier,strut,piston,spring},i)=>{
        const travel=suspension.wheelTravel[i];
        carrier.position.y=travel;
-       carrier.rotation.y=(state.drivetrain&&i<2?state.drivetrain.steerAngle:0)+(suspension.wheelToe[i]||0);
+       carrier.rotation.y=(state.drivetrain&&i<2?steeringAngles(state.drivetrain.steerAngle)[i]:0)+(suspension.wheelToe[i]||0);
        carrier.rotation.z=suspension.wheelCamber[i]||0;
        piston.position.y=-.35+travel*.35;spring.position.y=-.16+travel*.18;
        spring.scale.set(1,1,Math.max(.65,1-travel*.8));
      });
+     const steerRack=state.drivetrain?.steerAngle||0;
+     if(car.userData.steerWheel)car.userData.steerWheel.rotation.z=-steerRack*2.4;
+     const localUp=new T.Vector3(0,1,0),startArm=new T.Vector3(),endArm=new T.Vector3(),axis=new T.Vector3();
+     for(const link of car.userData.controlLinks||[]){
+       const {sx,z,tier,fore,corner,mesh}=link;
+       startArm.set(sx*(tier?.57:.48),tier?.79:.39,z+fore*.16);
+       endArm.set(sx*(tier?1.04:1.07),(.41+(suspension.wheelTravel[corner]||0))+(tier?.37:-.12),z+fore*.09);
+       axis.subVectors(endArm,startArm);mesh.position.copy(startArm).add(endArm).multiplyScalar(.5);
+       mesh.quaternion.setFromUnitVectors(localUp,axis.clone().normalize());mesh.scale.set(1,axis.length(),1);
+     }
      const sy=Math.sin(state.yaw),cy=Math.cos(state.yaw);
      if(cameraMode===3){const pose=orbitPose(orbit,{x:state.x,y:y+1.05,z:state.z});camDesired.set(pose.position.x,Math.max(pose.position.y,heightAt(pose.position.x,pose.position.z)+.7),pose.position.z);lookDesired.set(pose.target.x,pose.target.y,pose.target.z);}
      else if(cameraMode===1&&state.loopAngle===null){camDesired.set(state.x-sy*1.5,y+1.5,state.z-cy*1.5);lookDesired.set(state.x-sy*30,y+1.2,state.z-cy*30);}
@@ -286,6 +310,18 @@ function initialize(w){
      accumulator+=dt;
      while(accumulator>=1/120&&phase==='running'){
        const input={throttle:keys.has('KeyW')||keys.has('ArrowUp'),brake:keys.has('KeyS')||keys.has('ArrowDown'),left:keys.has('KeyA')||keys.has('ArrowLeft'),right:keys.has('KeyD')||keys.has('ArrowRight'),lift:keys.has('Space'),boost:keys.has('ShiftLeft')||keys.has('ShiftRight'),roll:rollInput};rollInput=0;
+       // Native Gamepad API is optional; keyboard/touch remain authoritative
+       // if no connected controller is producing input.
+       const pad=typeof navigator.getGamepads==='function'?Array.from(navigator.getGamepads()).find(g=>g&&g.connected):null;
+       if(pad){const axis=pad.axes?.[0]||0,dead=.085;
+         if(Math.abs(axis)>dead){input.steer=Math.sign(-axis)*(Math.abs(axis)-dead)/(1-dead);lastGamepadActive=true;}
+         else if(lastGamepadActive){input.steer=0;}
+         const forward=pad.buttons?.[7]?.value||0,back=pad.buttons?.[6]?.value||0;
+         if(forward>.06)input.throttle=forward;
+         if(back>.06)input.brake=back;
+         if(pad.buttons?.[0]?.pressed)input.lift=true;
+         if(pad.buttons?.[1]?.pressed)input.boost=true;
+       }else lastGamepadActive=false;
        if(isResearchMode(state.mode))handleEvents(stepResearch(state,{...input,strafeLeft:keys.has('KeyJ'),strafeRight:keys.has('KeyL')},1/120));else handleEvents(step(state,input,1/120));
        suspensionStep(suspension,state,1/120,{mass:isResearchMode(state.mode)?1900+state.propellant:2160});state.suspension=suspension;accumulator-=1/120;
      }

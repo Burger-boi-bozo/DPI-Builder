@@ -1,4 +1,4 @@
-# Roadster X-Flight — Experimental Flight Lab V3.1
+# Roadster X-Flight — Experimental Flight Lab V3.2
 
 A self-hosted, original experimental-flight concept built on the recovered Roadster Flight Lab V1. This is **not** a physics-validated Tesla Roadster representation. Thruster characteristics, mass, aerodynamics, structural/thermal limits, and safety systems are hypothetical parameters designed for a playable R&D simulator. Not affiliated with Tesla or SpaceX.
 
@@ -100,3 +100,13 @@ New ground-vehicle dynamics include tire-temperature and load-sensitive grip, a 
 - The Engineering panel shows wheel camber, mean hub displacement, tire pressure and tire carcass temperature. Wheel carriers articulate with toe and camber. `game/engineering.mjs` accepts external distance/height traces as an interpolation function; no measured road traces are bundled or claimed.
 - Adds 10 new numerical tests for independent hub states, four tire load support, bump response, airborne release, camber gain, nonlinear wheel response, tire force saturation, tire relaxation, tire pressure and deterministic trace interpolation. Total **83 automated checks**, plus Chromium renderer-stub UI tests.
 - `ENGINEERING_SPEC_100.md` tracks the user's 100-item engineering request. Most specifications remain *pending or partial*; this release does not claim OEM fidelity, licensed concept meshes, true WebGL GPU validation or all 100 completed.
+
+
+## V3.2 — Steering / vehicle mesh / handling campus / ground physics
+
+- Directional steering **A left / D right**, faster rack input, independent Ackermann left/right front wheel carrier angles, corrected ESC target yaw sign, higher-speed steering range and caster-return behavior. Supports analog steering from the standard Gamepad API (left stick, shoulder triggers for power/brake).
+- Wheel-carrier links animate between body hard points and hub movement; steering wheel turns. Revised fender arches, DRL and rear-light assemblies, door details, mirrors, and separate bucket-seat cockpit and instruments. Procedural concept model, not licensed OEM geometry.
+- South of the suspension strip: continuous slalom/braking corridor, eight impact-detectable pylons, skidpad ring and connector route; roadway lines, signs and dynamic minimap. Localized water depth affects tire adhesion and hydroplaning forces; physics shares route data with the renderer. Pylons topple on contact, damage is tracked.
+- New fixed-timestep tests verify steering direction, mirror symmetry, neutral caster return, analog input, geometry, wet-patch grip, navigable routes, and single-event cone impact.
+- For the first drive, use **Suspension Lab**; hold **W** to accelerate; **A** is left, **D** is right, **S** brakes and then requests Reverse when held stationary. Drive south (negative Z) past the damper corridor to reach slalom and skidpad.
+- Physics uses an improved coupled four-wheel approximation rather than a validated multibody dynamics engine. Visual rendering is not fully GPU-verified here.

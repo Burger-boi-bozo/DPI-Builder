@@ -1,3 +1,4 @@
+import {PROVING_ROUTES,SLALOM_PYLONS,WET_PATCH} from './range.mjs';
 import {surfaceAt} from './suspension.mjs';
 import * as T from './three.module.min.js';
 import {GATES,LOOP,PARKED} from './physics.mjs';
@@ -5,7 +6,7 @@ import {RESEARCH_STAGES} from './research.mjs';
 
 const mat=(color,roughness=.65,metalness=0)=>new T.MeshStandardMaterial({color,roughness,metalness});
 const rubber=mat(0x10151c,.9),metal=mat(0x8c97a5,.23,.85),dark=mat(0x111b27,.35,.5);
-const white=new T.MeshPhysicalMaterial({color:0xe8edf2,metalness:.55,roughness:.24,clearcoat:1,clearcoatRoughness:.08}),glass=new T.MeshPhysicalMaterial({color:0x0b1b27,metalness:.48,roughness:.095,clearcoat:1,transparent:true,opacity:.94}),paint=mat(0xb9c8d6,.3,.5);
+const white=new T.MeshPhysicalMaterial({color:0xe8edf2,metalness:.55,roughness:.24,clearcoat:1,clearcoatRoughness:.08}),glass=new T.MeshPhysicalMaterial({color:0x0b1b27,metalness:.48,roughness:.095,clearcoat:1,transparent:true,opacity:.74,depthWrite:false}),paint=mat(0xb9c8d6,.3,.5);
 const glow=(color)=>new T.MeshBasicMaterial({color});
 function mesh(geo,material,parent,x=0,y=0,z=0){const m=new T.Mesh(geo,material);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
 function box(parent,w,h,d,material,x=0,y=0,z=0){return mesh(new T.BoxGeometry(w,h,d),material,parent,x,y,z);}
@@ -31,6 +32,23 @@ export function makeCar(color=0xdfe6ea,simple=false){
   sections(body,[[-2.36,.92,.59],[-2.04,1.09,.80],[-.6,1.12,.88],[1.48,1.15,.92],[2.22,1.06,.82]],.34,shell);
   sections(body,[[-.86,.91,.9],[-.2,.76,1.51],[.68,.75,1.51],[1.29,.96,.93]],.86,glass);
   sections(body,[[-.20,.77,1.53],[.6,.77,1.53]],1.50,shell);
+  // Interior is modeled beneath the glazing, with identifiable seat bolsters,
+  // console, steering wheel and an instrument binnacle.
+  const cabin=new T.Group();body.add(cabin);
+  const upholstery=mat(0x202b33,.87,.02),leather=mat(0x111820,.89,.02),stitch=mat(0x536371,.91),screen=glow(0x6a8794);
+  box(cabin,1.56,.12,1.74,leather,0,.85,.12);
+  for(const side of [-1,1]){
+    const seat=new T.Group();seat.position.set(side*.42,.90,.35);cabin.add(seat);
+    box(seat,.58,.14,.63,upholstery,0,0,.11);
+    const back=box(seat,.57,.80,.13,upholstery,0,.42,.41);back.rotation.x=-.18;
+    for(const edge of [-.245,.245])box(seat,.08,.56,.17,leather,edge,.34,.38);
+    box(seat,.26,.07,.12,stitch,0,.71,.44);
+  }
+  box(cabin,1.65,.20,.34,leather,0,.97,-.65);
+  box(cabin,.42,.22,.024,screen,0,1.03,-.80);
+  const steerWheel=new T.Group();steerWheel.position.set(-.49,1.08,-.48);steerWheel.rotation.x=-.31;cabin.add(steerWheel);
+  mesh(new T.TorusGeometry(.18,.025,8,24),leather,steerWheel);
+  box(steerWheel,.31,.022,.035,metal,0,0,0);box(steerWheel,.09,.085,.04,dark,0,0,.04);
   box(body,2.07,.12,4.35,dark,0,.31,0);
   box(body,1.94,.035,.06,glow(0xd5efff),0,.64,-2.355);
   const brakeLamp=glow(0xff4558);
@@ -46,6 +64,25 @@ export function makeCar(color=0xdfe6ea,simple=false){
     line(body,[[side*1.117,.83,-.58],[side*1.13,.44,-.59],[side*1.13,.44,1.08],[side*1.14,.86,1.13]],0x66717b);
     box(body,.09,.27,.30,dark,side*1.075,.64,1.38);
     const attitudeNozzle=mesh(new T.CylinderGeometry(.09,.11,.13,12),metal,body,side*1.16,.66,.68);attitudeNozzle.rotation.z=Math.PI/2;
+  }
+  // Flowing hood and deck contours avoid the single-box silhouette;
+  // curved fender arches are concentric with the actual suspension pivots.
+  const bodyEdge=mat(0x14202a,.56,.38),trim=mat(0x3f5763,.34,.62);
+  for(const side of [-1,1]){
+    for(const z of [-1.48,1.45]){
+      const arch=mesh(new T.TorusGeometry(.57,.042,7,32,Math.PI),bodyEdge,body,side*1.151,.46,z);
+      arch.rotation.y=Math.PI/2;arch.rotation.z=Math.PI;
+      const accent=mesh(new T.TorusGeometry(.605,.012,5,32,Math.PI),trim,body,side*1.162,.46,z);
+      accent.rotation.y=Math.PI/2;accent.rotation.z=Math.PI;
+    }
+    const sill=box(body,.12,.055,2.29,bodyEdge,side*1.105,.29,.14);sill.rotation.y=side*.01;
+    box(body,.36,.018,.045,trim,side*.95,.84,.41); // flush door handle
+    line(body,[[side*.95,.87,-.66],[side*1.11,.86,-.53],[side*1.13,.42,-.5]],0x536978);
+  }
+  // Thin full-width aerodynamic vent, rear reflector and segmented lamps.
+  const tail=glow(0xff283e);
+  for(const side of [-1,1])for(let k=0;k<3;k++){
+    box(body,.24,.042,.03,tail,side*(.72+k*.19),.77,2.295);
   }
   // Sculpted side air channels, running-light signatures and diffuser vanes.
   const carbon=mat(0x080d16,.34,.38);
@@ -129,7 +166,18 @@ export function makeCar(color=0xdfe6ea,simple=false){
   for(const x of [-.65,.65])box(body,.065,.23,.16,dark,x,1.02,1.93);
   box(body,2.35,.065,.37,shell,0,1.15,1.96);
   for(const x of [-1.14,1.14])box(body,.035,.16,.4,dark,x,1.18,1.96);
-  group.userData={body,wheels,springs,brakeLamp,brakeRotors};return group;
+  // Link geometries have physically separate inboard and upright endpoints.
+  // Updating both endpoints means the control arms change angle with wheel travel.
+  const controlLinks=[];
+  if(!simple)for(let i=0;i<springs.length;i++){
+    const sx=i%2?1:-1,z=i<2?-1.48:1.45;
+    for(const tier of [0,1])for(const fore of [-1,1]){
+      const segment=mesh(new T.CylinderGeometry(.022,.026,1,9),tier?metal:dark,body);
+      segment.castShadow=true;
+      controlLinks.push({mesh:segment,corner:i,sx,z,tier,fore});
+    }
+  }
+  group.userData={body,wheels,springs,brakeLamp,brakeRotors,steerWheel,controlLinks};return group;
 }
 export function makeLabel(text,color='#dce8ff',w=512,h=96){
   const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d');
@@ -208,6 +256,36 @@ export function createScene(container){
     const rock=mesh(new T.DodecahedronGeometry(s,0),rand()>.5?shrubs:rockMat,scene,x,s*.25,z);rock.scale.set(1,.4+rand()*.5,1);rock.rotation.set(rand(),rand(),rand());rock.castShadow=false;
   }
   for(let i=0;i<40;i++){const a=i/40*Math.PI*2,r=720+rand()*160,h=45+rand()*150;const m=mesh(new T.ConeGeometry(70+rand()*110,h,5),mountainMat,scene,Math.sin(a)*r,h*.34-4,Math.cos(a)*r);m.rotation.y=rand()*6;m.scale.z=.7;m.castShadow=false;}
+  // Handling campus beyond the south end of the suspension corridor:
+  // continuous slalom/braking pavement, transverse connector and skidpad.
+  // Surface friction and water are supplied by range.mjs to all four tires.
+  const campusMat=mat(0x393f48,.92,.02),kerbMat=mat(0x9caaa7,.76),wetMat=new T.MeshPhysicalMaterial({color:0x526c82,roughness:.16,metalness:.12,clearcoat:.75,transparent:true,opacity:.62,depthWrite:false});
+  box(scene,20,.09,200,campusMat,64,-.025,-219);
+  box(scene,75,.09,14,campusMat,102,-.025,-264);
+  const campusRing=mesh(new T.RingGeometry(30,42,128),campusMat,scene,137,.024,-264);campusRing.rotation.x=-Math.PI/2;campusRing.receiveShadow=true;
+  for(const radius of [30.2,41.8]){
+    const marking=mesh(new T.RingGeometry(radius-.12,radius+.12,128),kerbMat,scene,137,.035,-264);marking.rotation.x=-Math.PI/2;marking.receiveShadow=true;
+  }
+  const pitch=PROVING_ROUTES.slalom;
+  const campusLines=[];
+  for(let z=pitch.z1;z<pitch.z0;z+=12){campusLines.push([54.25,.035,z,.16,.015,6],[73.75,.035,z,.16,.015,6]);}
+  for(let z=-314;z<-135;z+=20)campusLines.push([64,.035,z,.18,.015,8]);
+  campusLines.push([64,.042,-316,18,.015,.38],[64,.042,-130,18,.015,.38]);
+  instancedBoxes(scene,campusLines,lineMat);
+  const pylonShell=mat(0xff7747,.8),pylonCollar=mat(0xfce6cf,.86),pylonFoot=mat(0x303842,.9);
+  const coursePylons=[];
+  for(const p of SLALOM_PYLONS){
+    const assembly=new T.Group();assembly.position.set(p.x,0,p.z);scene.add(assembly);coursePylons.push(assembly);
+    mesh(new T.ConeGeometry(.32,1.06,12),pylonShell,assembly,0,.54,0);
+    mesh(new T.CylinderGeometry(.215,.245,.13,12),pylonCollar,assembly,0,.48,0);
+    box(assembly,.7,.035,.7,pylonFoot,0,.018,0);
+  }
+  // The wet braking block is rendered translucent to expose the line texture.
+  const puddle=box(scene,WET_PATCH.x1-WET_PATCH.x0,.015,WET_PATCH.z1-WET_PATCH.z0,wetMat,(WET_PATCH.x1+WET_PATCH.x0)/2,.044,(WET_PATCH.z0+WET_PATCH.z1)/2);
+  puddle.receiveShadow=false;
+  for(const [name,x,z] of [['SLALOM / 8 CONES',64,-145],['WET BRAKE TEST',64,-228],['SKIDPAD',137,-264]]){
+    const badge=makeLabel(name,'#e8f8ff');badge.position.set(x,4.8,z);badge.scale.set(23,3,1);scene.add(badge);
+  }
   const gateGroup=new T.Group();scene.add(gateGroup);const gates=GATES.map((p,i)=>{
     const g=new T.Group();g.position.set(...p);const prev=i?GATES[i-1]:[0,4,42];g.lookAt(p[0]+p[0]-prev[0],p[1],p[2]+p[2]-prev[2]);
     const ring=mesh(new T.TorusGeometry(7.5,.13,8,64),glow(0xc0b4fa),g);ring.castShadow=false;
@@ -335,6 +413,7 @@ export function createScene(container){
   function setVehicleEffects(s,t){
     if(s.mode==='dynamics'&&s.drivetrain){
       const d=s.drivetrain;
+      if(coursePylons)coursePylons.forEach((p,i)=>{p.rotation.z+=((d.hitPylons?.includes(i)?1.22:0)-p.rotation.z)*.12;});
       car.userData.brakeLamp.color.setHex(d.regenKw>1||d.brakeTemperature.some((v,i)=>d.tireForceX[i]<-1000)?0xffacb7:0xff4558);
       car.userData.brakeRotors.forEach((r,i)=>{
         const glowFactor=Math.max(0,Math.min(1,(d.brakeTemperature[i]-330)/350));

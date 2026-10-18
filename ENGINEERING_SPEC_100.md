@@ -39,3 +39,13 @@ All other requirement numbers **18–20, 22, 24–54, 56–100**, plus the unfin
 - **V4:** professionally licensed high-resolution art, world and audio improvements, end-to-end WebGL and graphics performance QA on actual GPUs. Licensed mesh references and target GPU devices are prerequisites.
 
 The full 100 concepts are also listed in [`ROADMAP_100.md`](ROADMAP_100.md). Further work must keep GitHub tests and Proxmox deployment rollbacks intact.
+
+
+## V3.2 — subsequent partial coverage
+
+- 24/25: improved differential front-wheel Ackermann angles, steering-rack rate and caster return (still not calibrated).
+- 33/40: campus pylons now use finite-energy impulse-style dissipation; complete body collision shape fitting and general contact manifolds are not implemented.
+- 51–60: procedural concept exterior, cabin, fenders, lighting, steering assembly and articulating control arms upgraded; licensed high-resolution OEM geometry and calibrated photometry remain unavailable.
+- 61/67/83: separate slalom, braking course, skidpad, continuous route data, localized wet asphalt, dynamic engineering minimap. Full laser-scan data and terrain deformation remain pending.
+- 88: basic gamepad steering/trigger support added. Calibration, deadzone UI and accessibility binding editor remain pending.
+- No additional items in the 100-item specification are claimed fully validated.

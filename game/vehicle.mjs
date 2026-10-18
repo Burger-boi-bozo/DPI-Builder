@@ -1,3 +1,4 @@
+import {surfaceGripAt,waterDepthAt,SLALOM_PYLONS} from './range.mjs';
 import {HARDPOINTS,magicFormulaForce,relaxationStep,tirePressureFromHeat} from './engineering.mjs';
 // Concept AWD EV tire / steering / braking model. Not calibrated to a Tesla.
 // Ground-only: 4 contact patches use the suspension solver's individual loads.
@@ -20,6 +21,23 @@ export function effectiveTireMu(base,tempC,normalN,velocity=0,wear=0){
 }
 export function brakeFadeFactor(rotorC){return clamp(1-.62*clamp((rotorC-360)/340,0,1),.38,1);}
 const corners=[[-1.08,-1.48],[1.08,-1.48],[-1.08,1.45],[1.08,1.45]];
+// Positive steering is left: front left is the inside tire; front right
+// is inside for a right turn. Ackermann is computed from the physical
+// wheelbase and front track, not a duplicated visual wheel rotation.
+export function steeringAngles(rackAngle,wheelbase=VEHICLE.wheelbase,track=VEHICLE.track){
+ const a=clamp(rackAngle,-.58,.58);
+ if(Math.abs(a)<1e-7)return [0,0];
+ const centerRadius=wheelbase/Math.tan(Math.abs(a));
+ const inner=Math.atan(wheelbase/Math.max(.1,centerRadius-track/2));
+ const outer=Math.atan(wheelbase/(centerRadius+track/2));
+ return a>0?[inner,outer]:[-outer,-inner];
+}
+export function steeringCommand(input){
+ // Allows analog steering from a gamepad; keyboard remains fully supported.
+ if(Number.isFinite(input.steer))return clamp(input.steer,-1,1);
+ return Number(!!input.left)-Number(!!input.right);
+}
+
 export function makeVehicleDynamics(){return {
  yawRate:0,steerAngle:0,steerCommand:0,
  wheelOmega:[0,0,0,0],longitudinalSlip:[0,0,0,0],slipAngles:[0,0,0,0],
@@ -30,7 +48,7 @@ export function makeVehicleDynamics(){return {
  tireWear:[0,0,0,0],tcsEnabled:true,tcsActive:false,torqueLimit:1,gear:"D",shiftHold:0,
  soc:88,regenKw:0,powerKw:0,absActive:false,escActive:false,
  longitudinalAccel:0,lateralAccel:0,velocityForward:0,velocityLateral:0,
- gripUtilization:0,brakeDistance:0,contactImpacts:0,impactEnergyJ:0
+ gripUtilization:0,brakeDistance:0,contactImpacts:0,impactEnergyJ:0,hitPylons:[],pylonImpacts:0
 };}
 function tireNormal(s,m,i,ax,ay){
  const base=s.suspension?.normalForces?.[i];
@@ -48,7 +66,7 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
  const dt=clamp(rawDt,0,.025),d=s.drivetrain??(s.drivetrain=makeVehicleDynamics());
  if(dt===0)return d;
  const m=options.mass||VEHICLE.mass,mu=clamp(options.mu??s.roadMu??VEHICLE.friction,.12,1.8);
- const steer=(input.left?1:0)-(input.right?1:0);
+ const steer=steeringCommand(input);
  const c=Math.cos(s.yaw),si=Math.sin(s.yaw);
  const vf=-s.vx*si-s.vz*c,vr=s.vx*c-s.vz*si;
  const speed=Math.hypot(vf,vr);
@@ -63,14 +81,16 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
  const braking=(d.gear==='D'&&reverseKey)||(d.gear==='R'&&forwardKey);
  const driveDirection=d.gear==='D'?1:-1;
  // Rack has steering inertia, rack-angle limiting and speed-dependent range.
- const steerLimit=.48/(1+Math.pow(speed/22,1.55));
+ const steerLimit=.56/(1+Math.pow(speed/27,1.35));
  // Mechanical trail and positive caster produce a speed-dependent aligning
  // tendency when the driver releases the steering command.
  const selfAlign=steer===0?clamp(1+speed*HARDPOINTS.trail*Math.sin(HARDPOINTS.caster)*13,1,2.7):1;
  const steerTarget=steer*steerLimit;
- d.steerAngle+=clamp(steerTarget-d.steerAngle,-1.55*selfAlign*dt,1.55*selfAlign*dt);
+ d.steerAngle+=clamp(steerTarget-d.steerAngle,-2.45*selfAlign*dt,2.45*selfAlign*dt);
  d.steerCommand=steer;
- const accelPedal=driving?1:0,brakePedal=braking?1:0;
+ const accelPedal=driving?clamp(Number(input.throttle)||1,0,1):0;
+ const brakePedal=braking?clamp(Number(d.gear==='D'?input.brake:input.throttle)||1,0,1):0;
+ const steerWheels=steeringAngles(d.steerAngle);
  // Torque/speed map and battery derating; this is an illustrative EV motor map.
  const motorRpm=speed/VEHICLE.wheelRadius*60/(2*Math.PI)*8.8;
  const powerTaper=clamp(1-Math.pow(motorRpm/(d.gear==='R'?4800:14500),1.4),.08,1);
@@ -90,7 +110,7 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
    const n=tireNormal(s,m,i,previousAx,previousAy);
    d.wheelLoads[i]=n;
    const wheelF=vf+d.yawRate*lx,wheelR=vr+d.yawRate*lz;
-   const delta=(front?d.steerAngle:0)+(s.suspension?.wheelToe?.[i]||0);
+   const delta=(front?steerWheels[i]:0)+(s.suspension?.wheelToe?.[i]||0);
    const wheelLong=wheelF*Math.cos(delta)-wheelR*Math.sin(delta);
    const wheelSide=wheelR*Math.cos(delta)+wheelF*Math.sin(delta);
    // Pacejka-inspired smooth saturation, relative to instantaneous vertical load.
@@ -102,7 +122,11 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
    const pressureFactor=clamp(1-.12*Math.abs(Math.log(pressureRatio)),.75,1);
    const compoundFactor=d.tireCompound==='touring'?.91:d.tireCompound==='track'?1.09:1;
    const hydroplane=d.waterDepth>0?clamp(1-d.waterDepth*Math.pow(Math.abs(wheelLong)/28,2)*.62,.26,1):1;
-   const tireMu=effectiveTireMu(mu,d.tireTemperature[i],n,speed,d.tireWear[i])*pressureFactor*compoundFactor*hydroplane;
+   const cx=s.x+lx*c+lz*si,cz=s.z-lx*si+lz*c;
+   const effectiveMu=surfaceGripAt(cx,cz,mu);
+   const localWater=Math.max(d.waterDepth,waterDepthAt(cx,cz));
+   const localHydroplane=localWater>0?clamp(1-localWater*Math.pow(Math.abs(wheelLong)/27,2)*.60,.28,1):1;
+   const tireMu=effectiveTireMu(effectiveMu,d.tireTemperature[i],n,speed,d.tireWear[i])*pressureFactor*compoundFactor*hydroplane*localHydroplane;
    const lateralMax=tireMu*n;
    const camber=s.suspension?.wheelCamber?.[i]||0;
    let fy=-magicFormulaForce(d.relaxedSlipAngles[i],n,tireMu,
@@ -148,13 +172,13 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
  // Aerodynamic side drag acts on lateral velocity and prevents endless drift.
  sumFy-=vr*(18+speed*1.3);
  // Yaw moment integrates independently: steering does not rotate the car on rails.
- const desiredRate=clamp(-vf*Math.tan(d.steerAngle)/VEHICLE.wheelbase,-2.1,2.1);
+ const desiredRate=clamp(vf*Math.tan(d.steerAngle)/VEHICLE.wheelbase,-2.1,2.1);
  const yawError=desiredRate-d.yawRate;
  const severeSlip=Math.abs(Math.atan2(vr,Math.max(2,Math.abs(vf))))>.22;
  d.escActive=!!s.assist&&speed>9&&(Math.abs(yawError)>.7||severeSlip);
  // ESC trims yaw response when trajectory becomes unstable.
  if(d.escActive)torque+=clamp(yawError*3800,-4200,4200);
- d.yawRate=clamp(d.yawRate+(torque/VEHICLE.yawInertia-d.yawRate*.18)*dt,-2.4,2.4);
+ d.yawRate=clamp(d.yawRate+(torque/VEHICLE.yawInertia-d.yawRate*(.22+.035*speed))*dt,-2.4,2.4);
  // Dynamic longitudinal and lateral velocities in car coordinates.
  const ax=sumFx/m,ay=sumFy/m;
  let nextForward=vf+ax*dt+vr*d.yawRate*dt;
@@ -182,6 +206,25 @@ export function stepRoadVehicle(s,input,rawDt,options={}){
    }
  }
 
+ // Elliptical footprint approximates the Roadster's 2.3 m body length.
+ // Each slalom pylon can be struck once, dissipating energy and tipping visually.
+ if(s.mode==='dynamics'&&s.z< -145){
+   for(let i=0;i<SLALOM_PYLONS.length;i++){
+     if(d.hitPylons.includes(i))continue;
+     const p=SLALOM_PYLONS[i],dx=p.x-s.x,dz=p.z-s.z;
+     const side=(dx*Math.cos(s.yaw)-dz*Math.sin(s.y))/1.44;
+     const front=(dx*Math.sin(s.yaw)+dz*Math.cos(s.yaw))/2.65;
+     if(side*side+front*front<1){
+       d.hitPylons.push(i);d.pylonImpacts++;
+       const impactSpeed=Math.hypot(s.vx,s.vz);
+       const loss=Math.min(1.5,.045*impactSpeed);
+       s.vx*=1-loss;s.vz*=1-loss;
+       d.yawRate+=clamp(-side*.045,-.07,.07);
+       s.structural=clamp(s.structural-.15*impactSpeed,0,100);
+       d.impactEnergyJ+=.5*m*(impactSpeed**2)*(1-(1-loss)**2);
+     }
+   }
+ }
  s.speed=Math.hypot(s.vx,s.vz);
  d.longitudinalAccel=ax;d.lateralAccel=ay;d.velocityForward=nextForward;d.velocityLateral=nextSide;
  d.gripUtilization=clamp(maxUtil,0,1);d.absActive=abs;
