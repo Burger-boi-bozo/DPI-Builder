@@ -101,7 +101,7 @@ export async function createScene(container,settings){
   function resize(){const w=container.clientWidth,h=container.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();pmat.uniforms.pixelScale.value=h*renderer.getPixelRatio()*.8;}
   addEventListener('resize',resize);setQuality(settings.quality);setWeather(settings.weather);
   function update(s,input,dt,mode='play',elapsed=0){
-    car.update(s,input.brake||input.handbrake);const golden=timeOfDay==='golden';sun.position.copy(s.p).add(V(-85,golden?45:120,-65));sun.target.position.copy(s.p);sun.target.updateMatrixWorld();
+    car.update(s,input.brake||input.handbrake);const cockpit=cameraMode===1&&mode!=='menu'&&!photo;car.glass.opacity=cockpit?.18:.84;car.glass.envMapIntensity=cockpit?.45:1.7;const golden=timeOfDay==='golden';sun.position.copy(s.p).add(V(-85,golden?45:120,-65));sun.target.position.copy(s.p);sun.target.updateMatrixWorld();
     contactShadow.position.set(s.p.x,surfaceAt(s.p.x,s.p.z).height+.024,s.p.z);contactShadow.rotation.z=-s.yaw;contactShadow.material.opacity=.55*Math.max(0,1-s.altitude/7);
     for(let i=0;i<gates.length;i++){const g=gates[i];g.group.visible=s.mode==='trial'&&i>=s.gate;g.ring.material.emissiveIntensity=i===s.gate?2:.2;g.tick.material.opacity=i===s.gate?1:.35;g.tick.rotation.z=Math.PI*.325+elapsed*.12;}
     emission+=dt*75;while(emission>=1){emission--;if(s.lifting>.02)for(const x of [-.83,.83]){const local=V(x,-.35,Math.random()<.5?-1.35:1.35);const pos=local.applyQuaternion(s.q).add(s.p),vel=V((rand()-.5)*1.5,-12*s.lifting,(rand()-.5)*1.5).applyQuaternion(s.q).add(s.v);emit(pos,vel);}

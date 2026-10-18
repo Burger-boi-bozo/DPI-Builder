@@ -91,7 +91,7 @@ export function buildVehicle(){
     const ring=mesh(new T.TorusGeometry(.278,.009,6,64),aluminum,spin);ring.rotation.y=Math.PI/2;ring.position.x=sign*.132;
     wheelRigs.push({rig,spin});
   }
-  root.traverse(o=>{if(o.isMesh)o.frustumCulled=true;});
+  root.traverse(o=>{if(o.isMesh){o.frustumCulled=true;if(o.material===glass)o.castShadow=false;}});
   let lastDash=-1;
   function update(s,braking){root.position.copy(s.p);root.quaternion.copy(s.q);for(let i=0;i<4;i++){const a=WHEELS[i],w=s.wheels[i],r=wheelRigs[i];r.rig.position.set(a[0],a[1]-w.length,a[2]);r.rig.rotation.y=w.angle;r.spin.rotation.x=-w.spin;}
     yoke.rotation.z=s.steer*2.7;tail.emissiveIntensity=braking?5:1.8;
