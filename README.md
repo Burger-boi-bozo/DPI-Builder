@@ -1,71 +1,76 @@
-# Roadster Flight Lab
+# Roadster Flight Lab V1 — Realism Rebuild
 
-An independent 3D browser game inspired by the October 2026 Roadster reveal.
+Play: **https://fly.dpifiles.org/v1/**
 
-## Play
+A ground-up replacement of V1's arcade movement, procedural car, range, and interface. It runs as a self-contained static browser game, with no account, build step, analytics, CDN runtime dependencies, or server-side game state. The separate main game and its development branch are independent.
 
-The static application lives in `dist/`. Serve that directory with any HTTP server. No build step or server data is required. Three.js and the interface fonts are vendored. The reveal player loads YouTube only when the player requests it.
+## What changed in 1.2
 
-- **Flight trial:** fly through twelve ordered gates. A reset adds three seconds. Best time is stored on the current device.
-- **Stunt run:** ninety seconds to score with barrel rolls, airtime, a lineup jump, and a full suction loop.
-- **Free roam:** unlimited compressed air and no time limit.
+- Six-axis rigid body integrated at 120 Hz, quaternion orientation, gravity, angular inertia, aerodynamic resistance and downforce.
+- Four independent spring-and-damper suspension contacts; tire forces react to slip, surface grip and normal load. Longitudinal and lateral forces share a combined friction limit. Rear-wheel drive, power-limited propulsion, load transfer, Ackermann steering, handbrake and a ground-effect fan.
+- Lift and rear thrust apply force in the car's orientation. Airborne yaw does not redirect existing velocity. Roll uses angular momentum. Gas consumption follows delivered impulse; mass changes with the reservoir. Optional stabilization and altitude hold consume gas too.
+- A new original Roadster model inspired by the October 2026 reveal: contoured body panels, wheel arch openings, glazing, detailed wheels and brake discs, cockpit, live dashboard, full-width rear lamp, diffuser and ten nozzle outlets.
+- A 1.4 km runway, handling circle, apron and service pad, launch ramp, hangars, lighting, rolling terrain, skid marks, tire dust and expanding cold-gas plumes. Hangars have collision boxes. The ramp mesh and simulation use the same height function.
+- CC0 photographic HDR environment lighting, physically based paint and glazing, contact shadows and adjustable shadow quality. Three lighting treatments and four body finishes.
+- Chase, cockpit, hood and orbit cameras; paused photo mode with drag orbit and scroll zoom. EV motor harmonics, rolling/wind noise, slip and gas audio (off initially).
+- Keyboard, multitouch and standard gamepad input. Phone HUD, settings, pause/resume, best times/splits and stunt scores saved on the device. Existing classic V1 records are retained under their old storage keys.
 
-WASD or arrow keys drive. Hold Space for lift, Shift for rear thrust, Q/E to roll. Release lift to descend. F toggles suction, C changes camera, R resets, Esc/P pauses, and M toggles sound. Touch controls are provided. The west loop is entered from the south with suction enabled and a forward speed above 13 m/s.
+## Controls
 
-The car model, terrain, gates, particles, and interface are original procedural assets. Handling is intentionally arcade-like and does not reproduce or validate vehicle specifications. No accounts, analytics, or network game services are used. Sound starts muted.
+| Input | Action |
+| --- | --- |
+| W / S or up / down | Accelerate / brake, then reverse |
+| A / D or left / right | Steer; airborne yaw |
+| Space / X | Lift / controlled descent |
+| Shift | Rear cold-gas thrust |
+| H | Capture current altitude while airborne |
+| F | Toggle ground-effect fan |
+| Q / E | Roll thrusters |
+| I / K | Manual pitch when stabilization is disabled |
+| B | Rear handbrake |
+| C | Cycle camera |
+| O | Pause in photo mode; drag to orbit, scroll to zoom |
+| R | Recover; adds 3 seconds in flight trial |
+| Esc / P | Pause / resume |
+| M | Sound on / off |
 
-## References
+Standard gamepad: left stick steering, triggers throttle/brake, A lift, B descend, X boost, bumpers roll, right-stick vertical manual pitch, D-pad up altitude hold, Start pause. Touch controls are included.
 
-- Elon Musk, lineup jump: https://x.com/elonmusk/status/2110913107094606330
-- Tesla, suction-ramp clip: https://x.com/Tesla/status/2110913438293647789
-- Tesla, full reveal: https://www.youtube.com/watch?v=qt5p-_tE8d0
-- Official visual reference: https://www.tesla.com/roadster
+## Sessions and assistance
 
-X playback was inaccessible in the build environment. The mechanics were based on accessible reveal descriptions and the official Tesla visual references. Original videos are linked in the game, with an optional official reveal embed; no original footage is bundled.
+**Open range:** unlimited training gas is enabled initially and identified in the HUD. Disable it in Setup for a finite reservoir. The marked purple service pad refills finite gas only when stopped.
 
-## Verification
+**Flight trial:** eight directional gates, swept crossing detection and best-run splits. Gas is replenished at gates as an explicitly disclosed training convenience. Recoveries add three seconds. Conserving momentum matters: pointing the car into a turn does not turn its existing velocity. Use thrust to redirect it.
 
-Run `node --test tests/physics.test.mjs` for deterministic checks of the simulation, gate detection, mode completion, fuel behavior, resets, and stunt scoring.
+**Stunt session:** 90 seconds with finite gas. Full airborne rotations earn points and can chain up to ×5; air time scores on a gentle landing. Hard landings break the chain.
 
-Three.js is copyright 2010–2024 Three.js Authors, licensed under MIT. The vendored distribution includes its license header; see `dist/THREE-LICENSE.txt` for the full license.
+## Fidelity and limits
 
-## V1.1 flight update
+This is an independent fan simulation, **not a validated digital twin** or a claim about a production vehicle's measured performance. Mass, power, tire stiffness, grip, suspension, aerodynamic coefficients, tank capacity, exhaust velocity and thrust are estimated tuning parameters in `dist/physics.mjs`.
 
-This continues original V1 from commit `3ccc626bc44b19b0f4d3a4d1fd1a75c0fbde8a48`.
-The original procedural car, desert test range, 12 gates, loop, and three modes
-remain the foundation. The public V1 URL is https://fly.dpifiles.org/v1/.
-The separate Dynamics Lab and its branch are maintained independently.
+The tire model uses a saturated slip-angle response and a combined friction circle, not a manufacturer tire dataset. Wheel spin is visual, rather than a separately integrated tire/drivetrain model. There is no deformable crash simulation, thermal tire model, real-time ray tracing or scanned vehicle mesh. Collision boxes approximate hangar walls; suspension/hull contacts model the driving surface. Graphics run locally on the player's GPU; Ultra increases resolution and shadow detail.
 
-- **H / HOLD:** lock the current altitude once airborne. Uses 6% air per second.
-  Space, X, empty air, landing, or reset returns to manual vertical control.
-- **X / DOWN:** descend faster; tap lift near the ground for a softer landing.
-- **Flight guide:** projected gate marker and a route through the next gates.
-  Missed gates direct you back to the approach side.
-- **Checkpoint splits:** compare with the splits from your best completed V1.1
-  trial. Old V1 time records remain; a new best stores its corresponding splits.
-- **Stunt chains:** complete another stunt within seven seconds to increase
-  the multiplier up to ×5. Hard landings and resets break the chain.
-  Combo-enabled stunt records are separate from the original stunt scores.
-- **Medals:** trial gold/silver/bronze at 48/65/90 seconds; stunt gold/silver/bronze
-  at 12,000/7,000/3,500 points. Results include top speed and maximum altitude.
-- **Settings:** performance, balanced, or high graphics; reduced camera motion;
-  optional flight guide. Preferences are saved on the current device.
-- **Mobile:** visible run timer, descend/hold controls, and a camera button.
+## Run and verify
 
-Run all 19 simulation regressions with `node --test tests/physics.test.mjs`.
-The suite includes a complete 12-gate flight using normal steering and lift,
-altitude hold with fuel exhaustion, combo limits, recovery guidance, and medals.
+Serve `dist/` with a normal static HTTP server. All executable runtime dependencies and the HDR environment are included. `dist/release.json` identifies the release.
 
-No build or npm installation is needed. Serve `dist/`; all runtime dependencies
-and fonts are included. `dist/release.json` identifies this release. Fonts retain
-the SIL Open Font License in `dist/FONTS-OFL-1.1.txt`.
+```sh
+node --test tests/physics.test.mjs
+node --check dist/game.mjs
+node --check dist/scene.mjs
+node --check dist/vehicle.mjs
+```
 
-### Existing Proxmox deployment
+Thirty deterministic checks cover static load balance, acceleration/braking load transfer, stopping distance, energy loss, reverse, steering symmetry, grip saturation, gravel, conserved airborne momentum, gas accounting/exhaustion, altitude control, roll recovery, pit refill, ramp launches, landing, recovery penalties, swept gate crossings, ordered trial progress, timed completion, timestep convergence, fan load and wall collision. The ordered gate test checks crossing/score logic, not autonomous completion of the course.
 
-On the DPI host, clone branch `roadster-flight-v1` to
-`/opt/roadster-flight-v1`, then run `python3 deploy/install-v1.py` as root.
-The installer checks the known tunnel configuration, validates the candidate,
-backs up the original, and adds only the `/v1/` route. It runs a separate local
-static server on port 18768 and leaves the main game on port 18767. A failed
-public verification restores the previous tunnel configuration. The service
-starts automatically after reboot. All source and runtime assets are tracked.
+For the existing DPI Proxmox host, `deploy/install-v1.py` remains the initial isolated-route installer. V1 uses `roadster-flight-v1.service` on loopback port 18768. The root game uses its own service and port 18767. Updates are staged as immutable release directories and published by atomically replacing `public/v1`; the prior release is retained for rollback. No tunnel edits are needed for normal updates.
+
+## References and credits
+
+- Official vehicle visual reference: https://www.tesla.com/roadster
+- Official reveal: https://www.youtube.com/watch?v=qt5p-_tE8d0
+- Original inspiration: https://x.com/elonmusk/status/2110913107094606330 and https://x.com/Tesla/status/2110913438293647789
+- HDR sky, Greg Zaal / Jarod Guest (CC0): https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky
+- Three.js r170 / RGBELoader: MIT. Fonts: SIL OFL. See `dist/ASSET-CREDITS.md` and bundled licenses.
+
+Tesla reference images were used for modeling and are not bundled. The prior classic release remains in Git history at `d4009f6ddc09b99f2b97e8947a8b30ebea999191` on this branch.

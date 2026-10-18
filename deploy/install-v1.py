@@ -22,7 +22,7 @@ def release(url):
     with urllib.request.urlopen(url, timeout=12) as response:
         assert response.status == 200
         data = json.load(response)
-        assert data['version'] == '1.1.1', data
+        assert data['version'] == json.loads((ROOT / 'dist/release.json').read_text())['version'], data
         return data
 
 if os.geteuid() != 0:

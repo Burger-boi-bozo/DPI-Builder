@@ -1,105 +1,37 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createState,step,gateCrossed,GATES,resetPosition,LOOP} from '../dist/physics.mjs';
-const advance=(s,input,seconds)=>{const events=[];for(let i=0;i<seconds*120;i++)events.push(...step(s,input,1/120));return events;};
-
-test('throttle accelerates, steering changes direction, brakes slow the car',()=>{
-  const s=createState('free');advance(s,{throttle:true},1);assert(s.speed>20);assert(s.z<42);
-  advance(s,{throttle:true,left:true},.5);assert(s.yaw>0);assert(s.x<0);const v=s.speed;
-  advance(s,{brake:true},.4);assert(s.speed<v-10);
-});
-test('lift consumes air, releasing it lands, ground recharges',()=>{
-  const s=createState('trial');advance(s,{lift:true},3);assert(s.y>18);assert(s.air<75);assert(!s.grounded);
-  advance(s,{},4);assert(s.grounded);assert.equal(s.y,0);advance(s,{},2);assert.equal(s.air,100);
-});
-test('empty tank cannot fly forever; free roam has unlimited air',()=>{
-  const s=createState();advance(s,{lift:true,boost:true},5);assert(s.air>=0);assert(s.air<1);
-  const f=createState('free');advance(f,{lift:true},20);assert.equal(f.air,100);assert(f.y<=70);
-});
-test('swept gate detection works at high speed and rejects missed or backwards passes',()=>{
-  assert(gateCrossed({x:0,y:3,z:5},{x:0,y:3,z:-60},0));
-  assert(!gateCrossed({x:12,y:3,z:5},{x:12,y:3,z:-60},0));
-  assert(!gateCrossed({x:0,y:25,z:5},{x:0,y:25,z:-60},0));
-  assert(!gateCrossed({x:0,y:3,z:-60},{x:0,y:3,z:5},0));
-});
-test('an airborne barrel roll scores exactly once and records its objective',()=>{
-  const s=createState('free');s.y=20;s.grounded=false;
-  step(s,{lift:true,roll:1},1/120);const events=advance(s,{lift:true},1.2);
-  assert.equal(events.filter(e=>e.type==='roll').length,1);assert.equal(s.score,750);assert(s.objectives.roll);assert.equal(s.roll,0);
-});
-test('suction attaches to a full loop, returns to ground, and awards completion',()=>{
-  const s=createState('free');s.x=LOOP.x;s.z=LOOP.z+5;s.speed=28;
-  const events=advance(s,{throttle:true},5);
-  assert(events.some(e=>e.type==='loopStart'));assert(events.some(e=>e.type==='loop'));
-  assert(s.objectives.loop);assert.equal(s.loopAngle,null);assert.equal(s.y,0);
-});
-test('reset preserves checkpoint and adds an explicit trial time penalty',()=>{
-  const s=createState();s.gate=4;s.time=14;s.score=4000;s.air=2;resetPosition(s);
-  assert.equal(s.gate,4);assert.equal(s.time,17);assert.equal(s.resets,1);assert.equal(s.air,100);
-  assert.equal(s.x,GATES[3][0]);assert.equal(s.z,GATES[3][2]);assert.equal(s.score,3750);
-});
-test('crossing every ordered gate finishes the trial and awards all checkpoint points',()=>{
-  const s=createState();
-  for(let i=0;i<GATES.length;i++){
-    const g=GATES[i],prev=i?GATES[i-1]:[0,4,42];const dx=g[0]-prev[0],dz=g[2]-prev[2],len=Math.hypot(dx,dz);
-    s.x=g[0]-dx/len*.1;s.z=g[2]-dz/len*.1;s.y=g[1]-1;s.vy=0;s.grounded=false;s.speed=25;s.yaw=Math.atan2(-dx,-dz);
-    const events=step(s,{},.02);assert(events.some(e=>e.type==='gate'),`Gate ${i+1} should count`);assert.equal(s.gate,i+1);
-  }
-  assert(s.completed);assert.equal(s.score,12000+(s.objectives.jump?1200:0));
-});
-test('stunt runs end at ninety seconds; completed runs freeze',()=>{
-  const s=createState('stunt');s.time=89.99;assert(step(s,{},.02).some(e=>e.type==='finish'));const t=s.time;advance(s,{throttle:true},1);assert.equal(s.time,t);assert.equal(s.speed,0);
-});
-test('jumping the complete vehicle lineup earns the signature stunt once',()=>{
-  const s=createState('free');s.z=-95;s.y=8;s.speed=35;s.grounded=false;
-  const events=advance(s,{lift:true},1.6);assert(events.some(e=>e.type==='jump'));assert(s.objectives.jump);
-});
-test('the full course is flyable with ordinary steering and lift inputs, without resets',()=>{
-  const s=createState('trial');
-  for(let i=0;i<120*90&&!s.completed;i++){
-    const g=GATES[s.gate],dx=g[0]-s.x,dz=g[2]-s.z;
-    let angle=Math.atan2(-dx,-dz)-s.yaw;angle=Math.atan2(Math.sin(angle),Math.cos(angle));
-    const targetSpeed=Math.abs(angle)>.4?16:26;
-    step(s,{left:angle>.025,right:angle<-.025,throttle:s.speed<targetSpeed,brake:s.speed>targetSpeed+2,lift:s.vy<(g[1]-1-s.y)*1.4},1/120);
-  }
-  assert(s.completed);assert.equal(s.gate,12);assert.equal(s.resets,0);assert(s.time<60);
-});
-
-test('altitude hold captures height, damps vertical motion, and spends air',async()=>{
-  const {toggleAltitudeHold}=await import('../dist/physics.mjs');const s=createState();
-  assert.equal(toggleAltitudeHold(s),false);advance(s,{lift:true},2);const y=s.y;
-  assert(toggleAltitudeHold(s));const air=s.air;advance(s,{},3);
-  assert(Math.abs(s.y-y)<.05);assert(Math.abs(s.vy)<.05);assert(Math.abs(s.air-(air-18))<.01);
-  step(s,{lift:true},1/120);assert.equal(s.holdAltitude,null);
-});
-test('descent releases altitude hold and an empty tank cannot maintain it',async()=>{
-  const {toggleAltitudeHold}=await import('../dist/physics.mjs');const s=createState();s.y=20;s.grounded=false;
-  toggleAltitudeHold(s);step(s,{descend:true},1/120);assert.equal(s.holdAltitude,null);assert(s.vy<0);
-  s.vy=0;s.air=.01;toggleAltitudeHold(s);advance(s,{},1);assert.equal(s.holdAltitude,null);assert(s.y<19);
-});
-test('stunt chains multiply consecutive rolls, cap at five, and expire',()=>{
-  const s=createState('free');s.y=30;s.grounded=false;s.holdAltitude=30;
-  for(let i=1;i<=7;i++){step(s,{roll:1},1/120);const ev=advance(s,{},1.1);const roll=ev.find(e=>e.type==='roll');assert(roll);assert.equal(roll.points,750*Math.min(i,5));}
-  assert.equal(s.maxCombo,5);advance(s,{},7.1);assert.equal(s.combo,0);
-});
-test('hard landings and resets break stunt chains',()=>{
-  const s=createState('stunt');s.y=1;s.grounded=false;s.vy=-15;s.airtime=2;s.combo=4;s.comboTime=7;
-  const ev=advance(s,{},.2);assert(ev.some(e=>e.type==='hardLanding'));assert.equal(s.combo,0);
-  s.combo=3;s.comboTime=4;s.holdAltitude=10;resetPosition(s);assert.equal(s.comboTime,0);assert.equal(s.holdAltitude,null);
-});
-test('trial points stay unchanged by stunt chain multipliers',()=>{
-  const s=createState('trial');s.y=20;s.grounded=false;s.holdAltitude=20;s.combo=5;s.comboTime=7;
-  step(s,{roll:1},1/120);const ev=advance(s,{},1.1);assert.equal(ev.find(e=>e.type==='roll').points,750);
-});
-test('missed gate navigation leads back to its approach side',async()=>{
-  const {gateNavigation}=await import('../dist/physics.mjs');const s=createState();
-  assert(!gateNavigation(s).recovering);s.z=-40;const n=gateNavigation(s);assert(n.recovering);assert(n.z>GATES[0][2]);
-  s.z=n.z;assert(!gateNavigation(s).recovering);
-});
-test('checkpoint splits include reset penalties and remain ordered',()=>{
-  const s=createState();s.time=10;resetPosition(s);s.z=-21.9;s.speed=20;s.y=3;s.grounded=false;
-  step(s,{},.02);assert.equal(s.gate,1);assert.equal(s.splits.length,1);assert(s.splits[0]>=13);
-});
-test('medal thresholds are inclusive and reward lower trial times or higher stunt scores',async()=>{
-  const {medalFor}=await import('../dist/physics.mjs');assert.equal(medalFor('trial',48),'GOLD');assert.equal(medalFor('trial',60),'SILVER');assert.equal(medalFor('trial',90),'BRONZE');assert.equal(medalFor('trial',91),'FINISHER');assert.equal(medalFor('stunt',12000),'GOLD');assert.equal(medalFor('stunt',7000),'SILVER');assert.equal(medalFor('stunt',3500),'BRONZE');assert.equal(medalFor('stunt',0),'FINISHER');
-});
+import {Vector3,Quaternion} from '../dist/three.module.min.js';
+import {createState,step,resetPosition,toggleHold,gateCrossed,surfaceAt,PARAMS,GATES} from '../dist/physics.mjs';
+const run=(s,input,seconds,dt=1/120)=>{const events=[];for(let i=0;i<Math.round(seconds/dt);i++)events.push(...step(s,input,dt));return events;};
+const vehicle=(mode='free')=>{const s=createState(mode);run(s,{},1);s.time=0;return s;};
+const finite=s=>{for(const x of [...s.p.toArray(),...s.v.toArray(),...s.q.toArray(),...s.w.toArray(),s.gas])assert.ok(Number.isFinite(x));assert.ok(Math.abs(s.q.length()-1)<1e-9);};
+test('four springs settle under gravity without creeping',()=>{const s=vehicle();run(s,{},30);assert.equal(s.contacts,4);assert.ok(s.p.y>.5&&s.p.y<.7);assert.ok(s.v.length()<.001);assert.ok(s.w.length()<.001);assert.equal(s.p.z,42);});
+test('contact loads balance weight and ground fan force',()=>{const s=vehicle();run(s,{},3);const load=s.wheels.reduce((n,w)=>n+w.load,0),expected=s.mass*9.80665+PARAMS.fanForce*(1-s.p.y/2);assert.ok(Math.abs(load-expected)<5);});
+test('rear drive accelerates and transfers load rearward',()=>{const s=vehicle();run(s,{throttle:1},2);assert.ok(s.forwardSpeed>10);assert.ok(s.wheels[2].load>s.wheels[0].load);assert.ok(s.p.z<32);assert.ok(Math.abs(s.p.x)<1e-8);});
+test('power and aerodynamic resistance bound speed without a speed clamp',()=>{const s=vehicle();s.p.z=500;run(s,{throttle:1},12);assert.ok(s.speed>65&&s.speed<105);assert.ok(s.zeroSixty>2&&s.zeroSixty<6);});
+test('braking transfers load forward and stops without reversing',()=>{const s=vehicle();run(s,{throttle:1},4);run(s,{brake:1},.2);assert.ok(s.wheels[0].load>s.wheels[2].load);run(s,{brake:1},8);assert.ok(s.speed<.01);assert.ok(Math.abs(s.forwardSpeed)<.01);});
+test('braking from 60 mph uses a plausible finite distance',()=>{const s=vehicle();s.v.z=-26.8224;const start=s.p.clone();run(s,{brake:1},5);const d=s.p.distanceTo(start);assert.ok(d>20&&d<50,d);assert.ok(s.speed<.01);});
+test('coasting dissipates kinetic energy',()=>{const s=vehicle();s.v.z=-30;const initial=s.v.lengthSq();run(s,{},5);assert.ok(s.v.lengthSq()<initial*.85);});
+test('reverse works without yaw at a standstill',()=>{const s=vehicle();run(s,{throttle:-.5},2);assert.ok(s.p.z>45);assert.ok(s.forwardSpeed<0);const stopped=vehicle();run(stopped,{steer:1},5);assert.ok(Math.abs(stopped.yaw)<1e-6);});
+test('left and right steering have mirrored trajectories',()=>{const left=vehicle(),right=vehicle();run(left,{throttle:1},1.4);run(right,{throttle:1},1.4);run(left,{throttle:.3,steer:.3},3);run(right,{throttle:.3,steer:-.3},3);assert.ok(left.p.x<0&&right.p.x>0);assert.ok(Math.abs(left.p.x+right.p.x)<.01);assert.ok(Math.abs(left.p.z-right.p.z)<.01);});
+test('combined grip saturates under excessive steering without numeric instability',()=>{const s=vehicle();run(s,{throttle:1},5);run(s,{throttle:1,steer:1,handbrake:true},8);finite(s);assert.ok(s.maxSpeed<130);assert.ok(s.damage<100);});
+test('gravel provides less lateral grip than asphalt',()=>{const asphalt=vehicle(),gravel=vehicle();asphalt.fan=gravel.fan=false;gravel.p.set(300,asphalt.p.y,0);asphalt.v.set(5,0,-10);gravel.v.copy(asphalt.v);step(asphalt,{},1/120);step(gravel,{},1/120);assert.ok(Math.abs(asphalt.accel.x)>Math.abs(gravel.accel.x));assert.equal(gravel.surface,'GRAVEL');});
+test('flight preserves horizontal momentum when the car rotates',()=>{const s=vehicle();s.p.set(300,25,0);s.v.set(0,0,-30);s.gas=0;s.unlimited=false;s.assists=false;s.w.y=.7;run(s,{},.3);assert.ok(Math.abs(s.v.x)<.001);assert.ok(s.v.z< -29);assert.ok(Math.abs(s.yaw)>.15);});
+test('gas consumption tracks delivered impulse',()=>{const s=vehicle();s.p.set(300,40,0);s.unlimited=false;s.assists=false;s.fan=false;const initial=s.gas;run(s,{boost:true},.5);assert.ok(Math.abs(initial-s.gas-PARAMS.boostForce/PARAMS.exhaustVelocity*.5)<1e-6);});
+test('limited remaining gas proportionally limits delivered thrust',()=>{const s=vehicle();s.p.set(300,40,0);s.unlimited=false;s.assists=false;s.gas=.01;step(s,{boost:true},1/120);assert.equal(s.gas,0);assert.ok(s.boosting>0&&s.boosting<.1);step(s,{boost:true},1/120);assert.equal(s.boosting,0);});
+test('gravity remains active with an empty reservoir',()=>{const s=vehicle();s.unlimited=false;s.gas=0;s.p.set(300,50,0);run(s,{lift:true,boost:true},1);assert.ok(s.v.y< -9&&s.v.y> -11);assert.equal(s.lifting,0);assert.equal(s.boosting,0);assert.equal(s.gas,0);});
+test('altitude control settles around captured height',()=>{const s=vehicle();run(s,{lift:true},2);assert.equal(toggleHold(s),true);const target=s.hold;run(s,{},7);assert.ok(Math.abs(s.p.y-target)<.1);assert.ok(Math.abs(s.v.y)<.03);});
+test('altitude hold rejects the ground and cancels on manual descent',()=>{const s=vehicle();assert.equal(toggleHold(s),false);run(s,{lift:true},2);toggleHold(s);step(s,{descend:true},1/120);assert.equal(s.hold,null);});
+test('a full rotation uses angular momentum and can recover with assistance',()=>{const s=vehicle();run(s,{lift:true},5);const before=s.score;run(s,{lift:true,roll:1},1.4);run(s,{lift:true},5);finite(s);assert.ok(s.score>=before+1000);assert.ok(Math.abs(s.roll)<.15);});
+test('finite fuel is refilled only at the stationary service pad',()=>{const s=vehicle();s.unlimited=false;s.gas=100;run(s,{},1);assert.ok(s.gas>120);s.p.x=100;s.gas=100;run(s,{},1);assert.equal(s.gas,100);s.p.x=0;s.v.z=-10;run(s,{throttle:1},1);assert.equal(s.gas,100);});
+test('ramp launches through contact forces rather than a scripted jump',()=>{const s=vehicle();s.fan=false;s.p.set(46,.615,-110);run(s,{throttle:1},6);assert.ok(s.p.z< -190);assert.ok(s.p.y>5);assert.equal(s.contacts,0);assert.ok(s.v.y>0);});
+test('a hard landing settles with finite velocities',()=>{const s=vehicle();s.p.set(80,12,100);s.v.y=-8;const events=run(s,{},6);finite(s);assert.equal(s.contacts,4);assert.ok(s.v.length()<.03);assert.ok(events.some(e=>e.type==='landing'&&e.impact>5));assert.ok(s.damage>0);});
+test('recovery restores a playable state and adds the advertised trial penalty',()=>{const s=vehicle('trial');s.gate=2;s.time=20;s.w.set(2,3,4);s.gas=0;resetPosition(s);assert.equal(s.time,23);assert.equal(s.resets,1);assert.equal(s.gate,2);assert.equal(s.gas,PARAMS.gasCapacity);assert.equal(s.w.length(),0);assert.equal(s.hold,GATES[1][1]);});
+test('gate crossings are swept and directional',()=>{const g=GATES[0];assert.equal(gateCrossed(new Vector3(g[0],g[1],g[2]+40),new Vector3(g[0],g[1],g[2]-40),0),true);assert.equal(gateCrossed(new Vector3(g[0],g[1],g[2]-40),new Vector3(g[0],g[1],g[2]+40),0),false);assert.equal(gateCrossed(new Vector3(30,g[1],g[2]+40),new Vector3(30,g[1],g[2]-40),0),false);});
+test('crossing each trial gate produces one ordered split and finishes',()=>{const s=vehicle('trial');for(let i=0;i<GATES.length;i++){const g=GATES[i],prev=i?GATES[i-1]:[0,3,42],n=new Vector3(g[0]-prev[0],0,g[2]-prev[2]).normalize();s.p.set(...g).addScaledVector(n,-.2);s.v.copy(n).multiplyScalar(60);step(s,{},1/120);assert.equal(s.gate,i+1);assert.equal(s.splits.length,i+1);assert.equal(s.gas,PARAMS.gasCapacity);}assert.equal(s.completed,true);const time=s.time;step(s,{throttle:1},1/120);assert.equal(s.time,time);});
+test('stunt mode ends at ninety simulation seconds',()=>{const s=vehicle('stunt');s.time=89.99;const events=run(s,{},.1);assert.ok(s.completed);assert.ok(events.some(e=>e.type==='finish'));assert.ok(s.time<90.02);});
+test('simulation is repeatable and remains close across two fixed step sizes',()=>{const a=vehicle(),b=vehicle(),c=vehicle();run(a,{throttle:1,steer:.04},3);run(b,{throttle:1,steer:.04},3);run(c,{throttle:1,steer:.04},3,1/240);assert.deepEqual(a.p.toArray(),b.p.toArray());assert.ok(a.p.distanceTo(c.p)<.5);finite(c);});
+test('fan increases normal load without creating horizontal speed',()=>{const on=vehicle(),off=vehicle();off.fan=false;run(off,{},2);assert.ok(on.wheels[0].load>off.wheels[0].load);assert.ok(off.speed<.001&&on.speed<.01);});
+test('hangar walls reject penetration and preserve finite state',()=>{const s=vehicle();s.p.set(-110,.615,51);s.v.z=-20;run(s,{},1);finite(s);assert.ok(s.p.z>=49);assert.ok(s.damage>0);});
+test('ramp surface normal and height are consistent',()=>{const sf=surfaceAt(46,-170);assert.equal(sf.height,1.5);assert.ok(Math.abs(sf.normal.z/sf.normal.y-.15)<1e-8);});
+test('invalid time deltas do not contaminate state',()=>{const s=vehicle(),p=s.p.toArray();assert.deepEqual(step(s,{},NaN),[]);assert.deepEqual(step(s,{},-1),[]);assert.deepEqual(s.p.toArray(),p);});
