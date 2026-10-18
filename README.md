@@ -2,7 +2,7 @@
 
 Play: **https://fly.dpifiles.org/v1/**
 
-A ground-up replacement of V1's arcade movement, procedural car, range, and interface. It runs as a self-contained static browser game, with no account, build step, analytics, CDN runtime dependencies, or server-side game state. The separate main game and its development branch are independent.
+A ground-up replacement of V1's arcade movement, procedural car, range, and interface. It runs as a self-contained static browser game, with no account, build step, or server-side game state. Game assets and runtime dependencies are bundled. The separate main game and its development branch are independent.
 
 ## What changed in 1.2
 
@@ -77,4 +77,6 @@ Tesla reference images were used for modeling and are not bundled. The prior cla
 
 ### Validation for this release
 
-The 30 physics checks passed locally and on the deployment host. A DOM/runtime smoke check exercised startup, acceleration HUD updates, pause/resume, lift and altitude hold, four cameras, photo mode, settings, viewport resizing and both challenge modes, with a mocked graphics backend. The model geometry was inspected from three angles. The available cloud browser could not create a WebGL context, including the lower-demand initialization fallback, so GPU rendering, mobile frame rate and live browser driving have not been visually verified for this release.
+The 30 physics checks passed locally and on the deployment host. A DOM/runtime smoke check exercised startup, acceleration HUD updates, pause/resume, lift and altitude hold, four cameras, photo mode, settings, viewport resizing and both challenge modes, with a mocked graphics backend. The model geometry was inspected from three angles. Desktop Chrome subsequently rendered the game at a displayed 119–120 FPS on the available machine. Browser inspection found and corrected mirrored body-surface winding, menu framing and cockpit eye position. Sustained live driving and physical mobile-device performance remain separate checks from the deterministic simulation tests.
+
+The domain's existing Cloudflare configuration injects security and traffic measurement scripts into HTML. The game code does not add its own analytics. Public game modules, styles and the HDR asset were verified byte-for-byte against the published source; the HTML contains those hosting-provider additions.

@@ -13,7 +13,7 @@ export function terrainHeight(x,z){
 export function surfaceAt(x,z){
   // Launch ramp: analytic surface used by both the visual mesh and contact solver.
   if(x>38&&x<54&&z<-150&&z>-190){const t=(-z-150)/40;return {height:6*t*t,normal:new V(0,1,.3*t).normalize(),grip:1.1,type:'RAMP'};}
-  const radius=Math.hypot(x,z+190),road=Math.abs(x)<19&&z<95&&z>-620 || radius>178&&radius<204 || Math.abs(x)<70&&Math.abs(z-20)<70;
+  const radius=Math.hypot(x,z+190),road=Math.abs(x)<19&&z<460&&z>-940 || radius>178&&radius<204 || Math.abs(x+38)<130&&Math.abs(z-25)<52.5;
   const height=terrainHeight(x,z),normal=height>0?new V(-(terrainHeight(x+1,z)-terrainHeight(x-1,z))*.5,1,-(terrainHeight(x,z+1)-terrainHeight(x,z-1))*.5).normalize():new V(0,1,0);
   return {height,normal,grip:road?1:.60,type:road?'ASPHALT':'GRAVEL'};
 }

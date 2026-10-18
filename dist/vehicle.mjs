@@ -23,11 +23,11 @@ export function buildVehicle(){
   for(const sign of [-1,1]){
     const positions=[],uvs=[],indices=[],N=140,M=12;
     for(let iz=0;iz<=N;iz++){const z=-2.32+4.6*iz/N,[width,top]=profile(z);for(let ix=0;ix<=M;ix++){const t=ix/M;const shoulder=Math.exp(-Math.pow((Math.abs(z)-1.43)/.52,2))*.10;const y=top+shoulder*Math.pow(t,3)-.045*Math.pow(t,10);positions.push(sign*width*t,y,z);uvs.push(t,iz/N);}}
-    for(let iz=0;iz<N;iz++)for(let ix=0;ix<M;ix++){const z=-2.32+4.6*(iz+.5)/N;if(z>-.82&&z<1.38&&ix/M<.78)continue;const a=iz*(M+1)+ix,b=a+M+1;indices.push(a,b,a+1,b,b+1,a+1);}
+    for(let iz=0;iz<N;iz++)for(let ix=0;ix<M;ix++){const z=-2.32+4.6*(iz+.5)/N;if(z>-.82&&z<1.38&&ix/M<.78)continue;const a=iz*(M+1)+ix,b=a+M+1;if(sign>0)indices.push(a,b,a+1,b,b+1,a+1);else indices.push(a,a+1,b,b,a+1,b+1);}
     let g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setAttribute('uv',new T.Float32BufferAttribute(uvs,2));g.setIndex(indices);g.computeVertexNormals();mesh(g,paint);
     const v=[],idx=[];
     for(let i=0;i<=N;i++){const z=-2.32+4.6*i/N,[width,top]=profile(z),d=Math.min(Math.abs(z+1.43),Math.abs(z-1.43)),arch=d<.435?-.235+Math.sqrt(.435*.435-d*d):-.36;const shoulder=Math.exp(-Math.pow((Math.abs(z)-1.43)/.52,2))*.10;v.push(sign*width,top+shoulder-.045,z,sign*(width-.018),arch,z);}
-    for(let i=0;i<N;i++)idx.push(i*2,i*2+1,i*2+2,i*2+1,i*2+3,i*2+2);
+    for(let i=0;i<N;i++){const a=i*2;if(sign<0)idx.push(a,a+1,a+2,a+1,a+3,a+2);else idx.push(a,a+2,a+1,a+1,a+2,a+3);}
     g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(v,3));g.setIndex(idx);g.computeVertexNormals();mesh(g,paint);
     // Wheel arch lips, panel gaps, sill and flush door handle.
     for(const z of [-1.43,1.43]){const pts=[];for(let i=0;i<=32;i++){const a=Math.PI*i/32;const zz=z+.437*Math.cos(a);pts.push([sign*(profile(zz)[0]+.002),-.235+.437*Math.sin(a),zz]);}tube(pts,.009,carbon);}
